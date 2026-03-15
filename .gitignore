@@ -1,0 +1,37 @@
+# Compiled binaries and objects
+/bin/
+*.o
+*.so
+*.a
+
+# GDB / pwndbg artifacts
+core
+core.*
+gdb.txt
+.gdb_history
+peda-session-*.txt
+
+# Valgrind artifacts
+vgcore.*
+callgrind.out.*
+cachegrind.out.*
+massif.out.*
+helgrind.out.*
+
+# strace, ltrace, uftrace artifacts
+strace.out
+strace.log
+*.strace
+ltrace.out
+ltrace.log
+*.ltrace
+uftrace.data/
+
+# QEMU artifacts
+qemu.log
+trace-events-all
+
+# Clangd / LSP / Editor artifacts
+compile_commands.json
+.cache/
+.vscode/
