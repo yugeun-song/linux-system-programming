@@ -4,6 +4,28 @@
 *.so
 *.a
 
+# CMake artifacts
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Windows / Visual Studio artifacts
+.vs/
+*.exe
+*.obj
+*.lib
+*.dll
+*.pdb
+
+# Windows / Visual Studio artifacts
+.vs/
+*.exe
+*.obj
+*.lib
+*.dll
+*.pdb
+
 # GDB / pwndbg artifacts
 core
 core.*
