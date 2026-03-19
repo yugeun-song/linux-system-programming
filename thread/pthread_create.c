@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -15,7 +17,7 @@ void *joinable_thread_routine(void *arg)
     return (void *)((uintptr_t)thread_exit_code);
 }
 
-void *detached_thread_routine(void *arg)
+void *detached_thread_routine(__attribute__((unused)) void *arg)
 {
     pid_t my_tid = gettid();
 
