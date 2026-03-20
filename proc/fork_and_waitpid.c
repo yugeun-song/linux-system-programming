@@ -1,7 +1,9 @@
-#include <sys/wait.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#define SHELL_SIGNAL_BASE 128
 
 void child_routine(void)
 {
@@ -20,10 +22,11 @@ void parent_routine(void)
 int main(void)
 {
     pid_t pid = fork();
+    int exit_code = 0;
 
     if (pid < 0) {
         fprintf(stderr, "fork failed\n");
-        return 1;
+        exit_code = 1;
     } else if (pid == 0) {
         child_routine();
     } else {
@@ -34,8 +37,15 @@ int main(void)
 
         if (WIFEXITED(status)) {
             printf("return code is %d\n", WEXITSTATUS(status));
+            exit_code = WEXITSTATUS(status);
+        } else if (WIFSIGNALED(status)) {
+            printf("terminated by signal %d\n", WTERMSIG(status));
+            exit_code = SHELL_SIGNAL_BASE + WTERMSIG(status);
+        } else {
+            fprintf(stderr, "abnormal termination\n");
+            exit_code = 1;
         }
     }
 
-    return 0;
+    return exit_code;
 }
