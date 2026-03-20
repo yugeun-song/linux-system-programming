@@ -1,8 +1,9 @@
 #define _GNU_SOURCE
 
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+
 #include <pthread.h>
 #include <unistd.h>
 
@@ -72,7 +73,7 @@ int main(void)
 
     return_code = (uint64_t)thread_return_code;
     printf("[%d] Main thread: Finished with return code %lu\n",
-           my_tid, (unsigned long) return_code);
+           my_tid, (unsigned long)return_code);
 
     pthread_attr_destroy(&detached_thread_attr);
     pthread_exit(NULL);
