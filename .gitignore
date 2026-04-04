@@ -57,3 +57,7 @@ trace-events-all
 compile_commands.json
 .cache/
 .vscode/
+
+# Claude Code artifacts
+.claude/
+CLAUDE.md

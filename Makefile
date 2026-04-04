@@ -4,7 +4,7 @@ LDFLAGS = -pthread
 
 BIN_DIR = bin
 LIB_DIRS = helper
-SRC_DIRS = usr proc thread mem io net ipc sig time err
+SRC_DIRS = user process thread memory io network ipc signal time error
 
 LIB_SRCS = $(wildcard $(addsuffix /*.c, $(LIB_DIRS)))
 LIB_OBJS = $(patsubst %.c, $(BIN_DIR)/%.o, $(LIB_SRCS))

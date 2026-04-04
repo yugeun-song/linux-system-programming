@@ -23,7 +23,7 @@ if(LIB_SRCS)
     add_library(helper_objs OBJECT ${LIB_SRCS})
 endif()
 
-set(SRC_DIRS usr proc thread mem io net ipc sig time err)
+set(SRC_DIRS user process thread memory io network ipc signal time error)
 
 foreach(DIR ${SRC_DIRS})
     file(GLOB TARGET_SRCS "${DIR}/*.c")
