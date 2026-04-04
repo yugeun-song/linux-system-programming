@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O0 -ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fasynchronous-unwind-tables -I.
+CFLAGS = -Wall -Wextra -Wconversion -Wsign-conversion -O0 -ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fasynchronous-unwind-tables -I.
 LDFLAGS = -pthread
 
 BIN_DIR = bin

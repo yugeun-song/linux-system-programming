@@ -7,13 +7,16 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 add_compile_options(
     -Wall
     -Wextra
+    -Wconversion
+    -Wsign-conversion
     -O0
     -ggdb3
     -fno-omit-frame-pointer
     -fno-optimize-sibling-calls
     -fasynchronous-unwind-tables
-    -I${CMAKE_SOURCE_DIR}
 )
+
+include_directories(${CMAKE_SOURCE_DIR})
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
