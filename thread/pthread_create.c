@@ -10,12 +10,12 @@
 void *joinable_thread_routine(void *arg)
 {
     pid_t my_tid = gettid();
-    uint64_t thread_exit_code = 13;
+    uintptr_t thread_exit_code = 13;
     char *msg = (char *)arg;
 
     printf("[%d] Joinable Child thread: %s\n", my_tid, msg);
 
-    return (void *)((uintptr_t)thread_exit_code);
+    return (void *)thread_exit_code;
 }
 
 void *detached_thread_routine(__attribute__((unused)) void *arg)
@@ -37,7 +37,7 @@ int main(void)
 
     pid_t my_tid = gettid();
 
-    uint64_t return_code = -1;
+    uintptr_t return_code = 0;
     void *thread_return_code;
     char *arg_msg = "Hello, POSIX Thread!";
 
@@ -71,7 +71,7 @@ int main(void)
         return 1;
     }
 
-    return_code = (uint64_t)thread_return_code;
+    return_code = (uintptr_t)thread_return_code;
     printf("[%d] Main thread: Finished with return code %lu\n",
            my_tid, (unsigned long)return_code);
 
