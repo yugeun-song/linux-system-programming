@@ -6,20 +6,24 @@ Each source file compiles into a standalone executable.
 ## Directory Structure
 
 ```
-├── process/        Process creation and management
-├── thread/         POSIX threads
-├── memory/         Memory management
-├── io/             File and device I/O
-├── network/        Socket programming
-├── ipc/            Inter-process communication
-├── signal/         Signal handling
-├── time/           Timers and clocks
-├── error/          Error handling
-├── user/           User and group operations
-├── helper/         Shared utility code (object library)
-├── bin/            Build output (generated)
-├── CMakeLists.txt
-└── Makefile
+.
+├── bin                       Build output (generated)
+├── error                     Error handling
+├── helper                    Shared utility code (object library)
+├── io                        File and device I/O
+├── ipc                       Inter-process communication
+├── memory                    Memory management
+├── network                   Socket programming
+├── process                   Process creation and management
+├── signal                    Signal handling
+├── thread                    POSIX threads
+├── time                      Timers and clocks
+├── user                      User and group operations
+├── CMakeLists.txt            CMake build configuration
+├── CMakePresets.json         CMake presets for WSL environments
+├── CMakeSettings.json        Visual Studio CMake integration
+├── Makefile                  GNU Make build configuration
+└── README.md
 ```
 
 Each `.c` file in a topic directory produces an executable at
