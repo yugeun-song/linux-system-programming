@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #include <pthread.h>
 #include <unistd.h>
@@ -46,20 +45,17 @@ int main(void)
         return 1;
     }
 
-    if (pthread_attr_setdetachstate(&detached_thread_attr,
-                                    PTHREAD_CREATE_DETACHED) != 0) {
+    if (pthread_attr_setdetachstate(&detached_thread_attr, PTHREAD_CREATE_DETACHED) != 0) {
         perror("pthread_attr_setdetachstate failed");
         return 1;
     }
 
-    if (pthread_create(&detached_thread, &detached_thread_attr,
-                       detached_thread_routine, NULL) != 0) {
+    if (pthread_create(&detached_thread, &detached_thread_attr, detached_thread_routine, NULL) != 0) {
         perror("pthread_create failed");
         return 1;
     }
 
-    if (pthread_create(&joinable_thread, NULL, joinable_thread_routine,
-                       (void *)arg_msg) != 0) {
+    if (pthread_create(&joinable_thread, NULL, joinable_thread_routine, (void *)arg_msg) != 0) {
         perror("pthread_create failed");
         return 1;
     }
@@ -72,8 +68,7 @@ int main(void)
     }
 
     return_code = (uintptr_t)thread_return_code;
-    printf("[%d] Main thread: Finished with return code %lu\n",
-           my_tid, (unsigned long)return_code);
+    printf("[%d] Main thread: Finished with return code %lu\n", my_tid, (unsigned long)return_code);
 
     pthread_attr_destroy(&detached_thread_attr);
     pthread_exit(NULL);

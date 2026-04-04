@@ -9,8 +9,7 @@ void child_routine(void)
 {
     int return_code = 23;
 
-    printf("[%d] I am child process, parent's pid is %d\n", getpid(),
-           getppid());
+    printf("[%d] I am child process, parent's pid is %d\n", getpid(), getppid());
     exit(return_code);
 }
 
