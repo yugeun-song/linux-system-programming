@@ -64,7 +64,7 @@ Both build systems apply identical flags:
 
 ```
 -Wall -Wextra -Wconversion -Wsign-conversion
--O0 -ggdb3
+-pg -O0 -ggdb3
 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fasynchronous-unwind-tables
 ```
 
