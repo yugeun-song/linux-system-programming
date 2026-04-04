@@ -18,14 +18,6 @@ cmake_install.cmake
 *.dll
 *.pdb
 
-# Windows / Visual Studio artifacts
-.vs/
-*.exe
-*.obj
-*.lib
-*.dll
-*.pdb
-
 # GDB / pwndbg artifacts
 core
 core.*
