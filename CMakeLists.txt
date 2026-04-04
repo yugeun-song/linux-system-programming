@@ -9,6 +9,7 @@ add_compile_options(
     -Wextra
     -Wconversion
     -Wsign-conversion
+    -pg
     -O0
     -ggdb3
     -fno-omit-frame-pointer
