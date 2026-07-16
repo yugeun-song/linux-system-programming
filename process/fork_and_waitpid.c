@@ -1,5 +1,5 @@
+#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -7,15 +7,14 @@
 
 void child_routine(void)
 {
-    int return_code = 23;
-
-    printf("[%d] I am child process, parent's pid is %d\n", getpid(), getppid());
-    exit(return_code);
+    static const char msg[] = "child_routine(): running as child\n";
+    write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+    _exit(23);
 }
 
-void parent_routine(void)
+void parent_routine(pid_t child_pid)
 {
-    printf("[%d] I am parent process\n", getpid());
+    printf("parent_routine(): running as parent, child pid is %d\n", child_pid);
 }
 
 int main(void)
@@ -24,24 +23,30 @@ int main(void)
     int exit_code = 0;
 
     if (pid < 0) {
-        fprintf(stderr, "fork failed\n");
+        fprintf(stderr, "main(): fork failed\n");
         exit_code = 1;
     } else if (pid == 0) {
         child_routine();
     } else {
         int status;
 
-        parent_routine();
-        waitpid(pid, &status, 0);
+        parent_routine(pid);
+
+        while (waitpid(pid, &status, 0) == -1) {
+            if (errno != EINTR) {
+                perror("main(): waitpid failed");
+                return 1;
+            }
+        }
 
         if (WIFEXITED(status)) {
-            printf("return code is %d\n", WEXITSTATUS(status));
+            printf("main(): return code is %d\n", WEXITSTATUS(status));
             exit_code = WEXITSTATUS(status);
         } else if (WIFSIGNALED(status)) {
-            printf("terminated by signal %d\n", WTERMSIG(status));
+            printf("main(): terminated by signal %d\n", WTERMSIG(status));
             exit_code = SHELL_SIGNAL_BASE + WTERMSIG(status);
         } else {
-            fprintf(stderr, "abnormal termination\n");
+            fprintf(stderr, "main(): abnormal termination\n");
             exit_code = 1;
         }
     }

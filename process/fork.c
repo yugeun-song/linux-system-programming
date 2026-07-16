@@ -1,5 +1,5 @@
+#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -7,15 +7,14 @@
 
 static void child_routine(void)
 {
-    int return_code = 23;
-
-    printf("child_routine(): [%d] running as child, parent's pid is %d\n", getpid(), getppid());
-    exit(return_code);
+    static const char msg[] = "child_routine(): running as child\n";
+    write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+    _exit(23);
 }
 
-static void parent_routine(void)
+static void parent_routine(pid_t child_pid)
 {
-    printf("parent_routine(): [%d] running as parent\n", getpid());
+    printf("parent_routine(): running as parent, child pid is %d\n", child_pid);
 }
 
 int main(void)
@@ -26,8 +25,14 @@ int main(void)
     if (pid > 0) {
         int status;
 
-        parent_routine();
-        waitpid(pid, &status, 0);
+        parent_routine(pid);
+
+        while (waitpid(pid, &status, 0) == -1) {
+            if (errno != EINTR) {
+                perror("main(): waitpid failed");
+                return 1;
+            }
+        }
 
         if (WIFEXITED(status)) {
             printf("main(): return code is %d\n", WEXITSTATUS(status));

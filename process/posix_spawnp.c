@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +26,13 @@ int main(void)
         int status;
 
         parent_routine();
-        waitpid(pid, &status, 0);
+
+        while (waitpid(pid, &status, 0) == -1) {
+            if (errno != EINTR) {
+                perror("main(): waitpid failed");
+                return 1;
+            }
+        }
 
         if (WIFEXITED(status)) {
             printf("main(): return code is %d\n", WEXITSTATUS(status));
