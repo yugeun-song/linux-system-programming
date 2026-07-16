@@ -17,7 +17,7 @@ void *joinable_thread_routine(void *arg)
     return (void *)thread_exit_code;
 }
 
-void *detached_thread_routine(__attribute__((unused)) void *arg)
+void *detached_thread_routine(void *arg)
 {
     pid_t my_tid = gettid();
 

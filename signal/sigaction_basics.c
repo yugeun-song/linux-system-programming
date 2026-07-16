@@ -8,8 +8,8 @@ static volatile sig_atomic_t g_is_running = 1;
 
 /* NOTICE: Only SIGKILL and SIGSTOP cannot be caught or blocked; all others can.
  * Returning from a SIGFPE/SIGILL/SIGSEGV/SIGBUS handler is undefined behavior. */
-static void signal_handler(__attribute__((unused)) int signum, siginfo_t *info,
-                           __attribute__((unused)) void *ucontext)
+static void signal_handler(int signum, siginfo_t *info,
+                           void *ucontext)
 {
     if (info->si_pid == getpid()) {
         const char msg[] = "signal_handler(): self-raised, ignoring\n";

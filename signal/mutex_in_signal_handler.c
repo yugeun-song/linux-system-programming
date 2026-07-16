@@ -44,7 +44,7 @@ static void handler_trylock(int signum)
     }
 }
 
-static void handler_timedlock(__attribute__((unused)) int signum)
+static void handler_timedlock(int signum)
 {
     struct timespec ts;
 
@@ -66,7 +66,7 @@ static void handler_timedlock(__attribute__((unused)) int signum)
     }
 }
 
-static void *thread_routine(__attribute__((unused)) void *arg)
+static void *thread_routine(void *arg)
 {
     printf("thread_routine(): locking mutex...\n");
 
