@@ -7,24 +7,20 @@ Each source file compiles into a standalone executable.
 
 ```
 .
-├── bin                       Build output (generated)
-├── error                     Error handling
-├── helper                    Shared utility code (object library)
-├── io                        File and device I/O
-├── ipc                       Inter-process communication
-├── memory                    Memory management
-├── network                   Socket programming
-├── process                   Process creation and management
-├── signal                    Signal handling
-├── thread                    POSIX threads
-├── time                      Timers and clocks
-├── user                      User and group operations
-├── CMakeLists.txt            CMake build configuration
-├── CMakePresets.json         CMake presets for WSL environments
-├── CMakeSettings.json        Visual Studio CMake integration
-├── Makefile                  GNU Make build configuration
+├── helper                     Shared utility code (object library)
+├── process                    Process creation and management
+├── signal                     Signal handling
+├── thread                     POSIX threads
+├── CMakeLists.txt             CMake build configuration
+├── CMakePresets.json          CMake presets for WSL environments
+├── CMakeSettings.json         Visual Studio CMake integration
+├── Makefile                   GNU Make build configuration
 └── README.md
 ```
+
+Additional topic directories (`error`, `io`, `ipc`, `memory`, `network`,
+`time`, `user`) are pre-registered in the build system for future
+examples. Build output is written to `bin/` (generated, not tracked).
 
 Each `.c` file in a topic directory produces an executable at
 `bin/<dir>/<name>`. For instance, `process/fork_and_waitpid.c`
@@ -80,3 +76,19 @@ preserved for accurate stack traces under GDB, Valgrind, and perf.
 Place a `.c` file in the appropriate topic directory. The build
 system discovers sources via file globbing; no manual registration
 is required.
+
+## Thread and Signal Safety
+
+The examples are written so that code built on top of them stays
+correct under threads and signals:
+
+- The `LOG_*` macros in `helper/log.h` are thread-safe: each record is
+  formatted into one buffer and written as a single unit, so concurrent
+  threads never interleave a line. They are not async-signal-safe and
+  must not be called from a signal handler.
+- Inside a signal handler, write directly with `write()` from static
+  buffers and format integers by hand, as shown in `signal/`. Only
+  async-signal-safe functions (see `signal-safety(7)`) are used there.
+- After `fork()`, the child path uses only async-signal-safe calls
+  (`write()`, `_exit()`), as shown in `process/fork.c`, so the pattern
+  stays correct even when the parent is multithreaded.
