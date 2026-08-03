@@ -14,7 +14,7 @@ void *joinable_thread_routine(void *arg)
     uintptr_t thread_exit_code = 13;
     char *msg = (char *)arg;
 
-    printf("[%d] Joinable Child thread: %s\n", my_tid, msg);
+    printf("joinable_thread_routine(): [%d] received message %s\n", my_tid, msg);
 
     return (void *)thread_exit_code;
 }
@@ -23,9 +23,9 @@ void *detached_thread_routine(void *arg)
 {
     pid_t my_tid = gettid();
 
-    printf("[%d] Detached Child thread: Waiting for 10 seconds...\n", my_tid);
+    printf("detached_thread_routine(): [%d] waiting for 10 seconds\n", my_tid);
     sleep(10);
-    printf("[%d] Detached Child thread: Finished\n", my_tid);
+    printf("detached_thread_routine(): [%d] finished\n", my_tid);
 
     return NULL;
 }
@@ -67,7 +67,7 @@ int main(void)
         return 1;
     }
 
-    printf("[%d] Main thread: Thread created\n", my_tid);
+    printf("main(): [%d] created the joinable and detached threads\n", my_tid);
 
     rc = pthread_join(joinable_thread, &thread_return_code);
     if (rc != 0) {
@@ -76,7 +76,7 @@ int main(void)
     }
 
     return_code = (uintptr_t)thread_return_code;
-    printf("[%d] Main thread: Finished with return code %lu\n", my_tid, (unsigned long)return_code);
+    printf("main(): [%d] joinable thread returned %lu\n", my_tid, (unsigned long)return_code);
 
     pthread_attr_destroy(&detached_thread_attr);
     pthread_exit(NULL);
