@@ -12,6 +12,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
+#include "helper/log.h"
+
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void handler_lock(int signum)
@@ -84,12 +86,12 @@ static int set_handler(void (*fn)(int))
     sa.sa_handler = fn;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
-        perror("set_handler(): sigemptyset");
+        LOG_PERROR(errno, "sigemptyset failed");
         return -1;
     }
 
     if (sigaction(SIGALRM, &sa, NULL) == -1) {
-        perror("set_handler(): sigaction");
+        LOG_PERROR(errno, "sigaction failed");
         return -1;
     }
 
@@ -99,14 +101,16 @@ static int set_handler(void (*fn)(int))
 int main(void)
 {
     pthread_t thread;
+    int rc;
 
     printf("main(): --- normal thread ---\n");
 
     pthread_mutex_lock(&g_mutex);
     printf("main(): mutex locked, creating thread\n");
 
-    if (pthread_create(&thread, NULL, thread_routine, NULL) != 0) {
-        perror("main(): pthread_create");
+    rc = pthread_create(&thread, NULL, thread_routine, NULL);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_create failed");
         return EXIT_FAILURE;
     }
 
@@ -114,8 +118,9 @@ int main(void)
     printf("main(): releasing mutex\n");
     pthread_mutex_unlock(&g_mutex);
 
-    if (pthread_join(thread, NULL) != 0) {
-        perror("main(): pthread_join");
+    rc = pthread_join(thread, NULL);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_join failed");
         return EXIT_FAILURE;
     }
 

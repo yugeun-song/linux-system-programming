@@ -6,6 +6,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "helper/log.h"
+
 void *joinable_thread_routine(void *arg)
 {
     pid_t my_tid = gettid();
@@ -39,31 +41,37 @@ int main(void)
     uintptr_t return_code = 0;
     void *thread_return_code;
     char *arg_msg = "Hello, POSIX Thread!";
+    int rc;
 
-    if (pthread_attr_init(&detached_thread_attr) != 0) {
-        perror("pthread_attr_init failed");
+    rc = pthread_attr_init(&detached_thread_attr);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_attr_init failed");
         return 1;
     }
 
-    if (pthread_attr_setdetachstate(&detached_thread_attr, PTHREAD_CREATE_DETACHED) != 0) {
-        perror("pthread_attr_setdetachstate failed");
+    rc = pthread_attr_setdetachstate(&detached_thread_attr, PTHREAD_CREATE_DETACHED);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_attr_setdetachstate failed");
         return 1;
     }
 
-    if (pthread_create(&detached_thread, &detached_thread_attr, detached_thread_routine, NULL) != 0) {
-        perror("pthread_create failed");
+    rc = pthread_create(&detached_thread, &detached_thread_attr, detached_thread_routine, NULL);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_create failed");
         return 1;
     }
 
-    if (pthread_create(&joinable_thread, NULL, joinable_thread_routine, (void *)arg_msg) != 0) {
-        perror("pthread_create failed");
+    rc = pthread_create(&joinable_thread, NULL, joinable_thread_routine, (void *)arg_msg);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_create failed");
         return 1;
     }
 
     printf("[%d] Main thread: Thread created\n", my_tid);
 
-    if (pthread_join(joinable_thread, &thread_return_code) != 0) {
-        perror("pthread_join failed");
+    rc = pthread_join(joinable_thread, &thread_return_code);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_join failed");
         return 1;
     }
 

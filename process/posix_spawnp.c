@@ -2,9 +2,10 @@
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#include "helper/log.h"
 
 #define SHELL_SIGNAL_BASE 128
 
@@ -29,7 +30,7 @@ int main(void)
 
         while (waitpid(pid, &status, 0) == -1) {
             if (errno != EINTR) {
-                perror("main(): waitpid failed");
+                LOG_PERROR(errno, "waitpid failed");
                 return 1;
             }
         }
@@ -41,11 +42,11 @@ int main(void)
             printf("main(): terminated by signal %d\n", WTERMSIG(status));
             exit_code = SHELL_SIGNAL_BASE + WTERMSIG(status);
         } else {
-            fprintf(stderr, "main(): abnormal termination\n");
+            LOG_ERR("abnormal termination");
             exit_code = 1;
         }
     } else {
-        fprintf(stderr, "main(): posix_spawn failed: %s\n", strerror(spawn_ret));
+        LOG_PERROR(spawn_ret, "posix_spawnp failed");
         exit_code = 1;
     }
 

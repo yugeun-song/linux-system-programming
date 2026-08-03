@@ -3,6 +3,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "helper/log.h"
+
 #define SHELL_SIGNAL_BASE 128
 
 void child_routine(void)
@@ -23,7 +25,7 @@ int main(void)
     int exit_code = 0;
 
     if (pid < 0) {
-        fprintf(stderr, "main(): fork failed\n");
+        LOG_PERROR(errno, "fork failed");
         exit_code = 1;
     } else if (pid == 0) {
         child_routine();
@@ -34,7 +36,7 @@ int main(void)
 
         while (waitpid(pid, &status, 0) == -1) {
             if (errno != EINTR) {
-                perror("main(): waitpid failed");
+                LOG_PERROR(errno, "waitpid failed");
                 return 1;
             }
         }
@@ -46,7 +48,7 @@ int main(void)
             printf("main(): terminated by signal %d\n", WTERMSIG(status));
             exit_code = SHELL_SIGNAL_BASE + WTERMSIG(status);
         } else {
-            fprintf(stderr, "main(): abnormal termination\n");
+            LOG_ERR("abnormal termination");
             exit_code = 1;
         }
     }

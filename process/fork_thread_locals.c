@@ -8,6 +8,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "helper/log.h"
+
 #define NUM_THREADS 3
 
 static __thread int tls_value;
@@ -109,18 +111,21 @@ static void child_report(int caller_local)
 int main(void)
 {
     long i;
+    int rc;
     int caller_local = 42;
 
     tls_value = 9999;
 
-    if (pthread_barrier_init(&g_ready, NULL, NUM_THREADS + 1) != 0) {
-        perror("main(): pthread_barrier_init failed");
+    rc = pthread_barrier_init(&g_ready, NULL, NUM_THREADS + 1);
+    if (rc != 0) {
+        LOG_PERROR(rc, "pthread_barrier_init failed");
         return 1;
     }
 
     for (i = 0; i < NUM_THREADS; ++i) {
-        if (pthread_create(&g_slots[i].tid, NULL, worker_routine, (void *)i) != 0) {
-            perror("main(): pthread_create failed");
+        rc = pthread_create(&g_slots[i].tid, NULL, worker_routine, (void *)i);
+        if (rc != 0) {
+            LOG_PERROR(rc, "pthread_create failed");
             return 1;
         }
     }
@@ -131,7 +136,7 @@ int main(void)
 
     pid_t pid = fork();
     if (pid < 0) {
-        perror("main(): fork failed");
+        LOG_PERROR(errno, "fork failed");
         return 1;
     }
 
@@ -142,7 +147,7 @@ int main(void)
 
     while (waitpid(pid, NULL, 0) == -1) {
         if (errno != EINTR) {
-            perror("main(): waitpid failed");
+            LOG_PERROR(errno, "waitpid failed");
             return 1;
         }
     }

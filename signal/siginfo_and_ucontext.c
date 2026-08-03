@@ -1,11 +1,14 @@
 #define _GNU_SOURCE
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/ucontext.h>
+
+#include "helper/log.h"
 
 #if defined(__x86_64__)
 #define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.gregs[REG_RIP])
@@ -128,19 +131,19 @@ int main(void)
     sa.sa_flags = SA_SIGINFO;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
-        perror("main(): failed to initialize signal set with sigemptyset");
+        LOG_PERROR(errno, "failed to initialize signal set with sigemptyset");
         return EXIT_FAILURE;
     }
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        perror("main(): failed to register SIGINT handler");
+        LOG_PERROR(errno, "failed to register SIGINT handler");
         return EXIT_FAILURE;
     }
 
     printf("main(): raising SIGINT to inspect signal context\n");
 
     if (raise(SIGINT) != 0) {
-        perror("main(): failed to raise SIGINT");
+        LOG_PERROR(errno, "failed to raise SIGINT");
         return EXIT_FAILURE;
     }
 

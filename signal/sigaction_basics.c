@@ -1,7 +1,10 @@
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
+
+#include "helper/log.h"
 
 /* NOTICE: Use 'volatile sig_atomic_t' instead of 'int' for the signal flag to ensure atomic access. */
 static volatile sig_atomic_t g_is_running = 1;
@@ -30,26 +33,26 @@ int main(void)
     int counter = 0;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
-        perror("main(): failed to initialize signal set with sigemptyset");
+        LOG_PERROR(errno, "failed to initialize signal set with sigemptyset");
         return EXIT_FAILURE;
     }
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        perror("main(): failed to register SIGINT handler");
+        LOG_PERROR(errno, "failed to register SIGINT handler");
         return EXIT_FAILURE;
     }
 
     if (sigaction(SIGKILL, &sa, NULL) == -1) {
-        perror("main(): failed to register SIGKILL handler (expected; cannot be caught)");
+        LOG_PWARN(errno, "failed to register SIGKILL handler (expected; cannot be caught)");
     }
 
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
-        perror("main(): failed to register SIGTERM handler");
+        LOG_PERROR(errno, "failed to register SIGTERM handler");
         return EXIT_FAILURE;
     }
 
     if (sigaction(SIGSTOP, &sa, NULL) == -1) {
-        perror("main(): failed to register SIGSTOP handler (expected; cannot be caught)");
+        LOG_PWARN(errno, "failed to register SIGSTOP handler (expected; cannot be caught)");
     }
 
     printf("main(): loop is running (press Ctrl+C or run 'kill %d' command)\n", getpid());
@@ -63,7 +66,7 @@ int main(void)
             counter = 0;
             printf("main(): raising SIGINT (self-raised, expected to be ignored)...\n");
             if (raise(SIGINT) != 0) {
-                perror("main(): failed to raise SIGINT");
+                LOG_PERROR(errno, "failed to raise SIGINT");
                 return EXIT_FAILURE;
             }
         }
