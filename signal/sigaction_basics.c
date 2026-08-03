@@ -34,6 +34,8 @@ int main(void)
     sa.sa_flags = SA_SIGINFO;
     int counter = 0;
 
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     if (sigemptyset(&sa.sa_mask) == -1) {
         LOG_PERROR(errno, "failed to initialize signal set with sigemptyset");
         return EXIT_FAILURE;

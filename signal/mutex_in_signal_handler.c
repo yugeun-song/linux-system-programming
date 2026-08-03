@@ -114,6 +114,8 @@ int main(void)
     pthread_t thread;
     int rc;
 
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     printf("main(): --- normal thread ---\n");
 
     pthread_mutex_lock(&g_mutex);

@@ -21,8 +21,12 @@ static void parent_routine(pid_t child_pid)
 
 int main(void)
 {
-    pid_t pid = fork();
+    pid_t pid;
     int exit_code = 0;
+
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
+    pid = fork();
 
     if (pid > 0) {
         int status;

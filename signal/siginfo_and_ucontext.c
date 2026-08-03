@@ -133,6 +133,8 @@ int main(void)
     sa.sa_sigaction = signal_handler;
     sa.sa_flags = SA_SIGINFO;
 
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     if (sigemptyset(&sa.sa_mask) == -1) {
         LOG_PERROR(errno, "failed to initialize signal set with sigemptyset");
         return EXIT_FAILURE;

@@ -114,6 +114,8 @@ int main(void)
     int rc;
     int caller_local = 42;
 
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
     tls_value = 9999;
 
     rc = pthread_barrier_init(&g_ready, NULL, NUM_THREADS + 1);

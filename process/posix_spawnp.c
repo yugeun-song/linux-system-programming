@@ -21,7 +21,11 @@ int main(void)
     pid_t pid;
     char *child_argv[] = { "ls", NULL };
     int exit_code = 0;
-    int spawn_ret = posix_spawnp(&pid, "ls", NULL, NULL, child_argv, environ);
+    int spawn_ret;
+
+    setvbuf(stdout, NULL, _IOLBF, 0);
+
+    spawn_ret = posix_spawnp(&pid, "ls", NULL, NULL, child_argv, environ);
 
     if (spawn_ret == 0) {
         int status;
