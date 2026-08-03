@@ -8,6 +8,8 @@ DEPFLAGS = -MMD -MP
 CFLAGS = $(STD) $(WARNINGS) $(DEBUG) $(DEPFLAGS) -I.
 LDFLAGS = -pthread
 
+DB_FLAGS = $(STD) $(WARNINGS) $(DEBUG) -I.
+
 BIN_DIR = bin
 LIB_DIRS = helper
 SRC_DIRS = user process thread memory io network ipc signal time error
@@ -20,7 +22,7 @@ EXES = $(patsubst %.c, $(BIN_DIR)/%, $(EXE_SRCS))
 
 DEPS = $(LIB_OBJS:.o=.d) $(addsuffix .d, $(EXES))
 
-.PHONY: all clean
+.PHONY: all clean compile_commands
 
 all: $(EXES)
 
@@ -32,7 +34,18 @@ $(BIN_DIR)/%: %.c $(LIB_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< $(LIB_OBJS) -o $@ $(LDFLAGS)
 
+compile_commands:
+	@printf '[\n' > compile_commands.json
+	@sep=" "; for src in $(LIB_SRCS) $(EXE_SRCS); do \
+		printf '%s{ "directory": "%s", "file": "%s", "command": "%s %s -c %s" }\n' \
+			"$$sep" "$(CURDIR)" "$$src" "$(CC)" "$(DB_FLAGS)" "$$src" \
+			>> compile_commands.json; \
+		sep=","; \
+	done
+	@printf ']\n' >> compile_commands.json
+
 clean:
 	rm -rf $(BIN_DIR)
+	rm -f gmon.out compile_commands.json
 
 -include $(DEPS)
