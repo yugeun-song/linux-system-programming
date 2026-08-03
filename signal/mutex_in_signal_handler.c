@@ -18,6 +18,8 @@ static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void handler_lock(int signum)
 {
+    int saved_errno = errno;
+
     const char m1[] = "handler_lock(): locking mutex...\n";
     write(STDOUT_FILENO, m1, sizeof(m1) - 1);
 
@@ -27,10 +29,14 @@ static void handler_lock(int signum)
     write(STDOUT_FILENO, m2, sizeof(m2) - 1);
 
     pthread_mutex_unlock(&g_mutex);
+
+    errno = saved_errno;
 }
 
 static void handler_trylock(int signum)
 {
+    int saved_errno = errno;
+
     const char m1[] = "handler_trylock(): trying mutex...\n";
     write(STDOUT_FILENO, m1, sizeof(m1) - 1);
 
@@ -44,10 +50,13 @@ static void handler_trylock(int signum)
         write(STDOUT_FILENO, m2, sizeof(m2) - 1);
         pthread_mutex_unlock(&g_mutex);
     }
+
+    errno = saved_errno;
 }
 
 static void handler_timedlock(int signum)
 {
+    int saved_errno = errno;
     struct timespec ts;
 
     const char m1[] = "handler_timedlock(): timed-locking mutex (1s timeout)...\n";
@@ -66,6 +75,8 @@ static void handler_timedlock(int signum)
         write(STDOUT_FILENO, m2, sizeof(m2) - 1);
         pthread_mutex_unlock(&g_mutex);
     }
+
+    errno = saved_errno;
 }
 
 static void *thread_routine(void *arg)

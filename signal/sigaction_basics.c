@@ -11,18 +11,20 @@ static volatile sig_atomic_t g_is_running = 1;
 
 /* NOTICE: Only SIGKILL and SIGSTOP cannot be caught or blocked; all others can.
  * Returning from a SIGFPE/SIGILL/SIGSEGV/SIGBUS handler is undefined behavior. */
-static void signal_handler(int signum, siginfo_t *info,
-                           void *ucontext)
+static void signal_handler(int signum, siginfo_t *info, void *ucontext)
 {
+    int saved_errno = errno;
+
     if (info->si_pid == getpid()) {
         const char msg[] = "signal_handler(): self-raised, ignoring\n";
         write(STDOUT_FILENO, msg, sizeof(msg) - 1);
-        return;
+    } else {
+        const char msg[] = "signal_handler(): external signal, exiting\n";
+        write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+        g_is_running = 0;
     }
 
-    const char msg[] = "signal_handler(): external signal, exiting\n";
-    write(STDOUT_FILENO, msg, sizeof(msg) - 1);
-    g_is_running = 0;
+    errno = saved_errno;
 }
 
 int main(void)

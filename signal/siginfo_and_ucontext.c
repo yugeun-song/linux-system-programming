@@ -85,6 +85,7 @@ static const char *si_code_str(int code)
 
 static void signal_handler(int signum, siginfo_t *info, void *ucontext)
 {
+    int saved_errno = errno;
     const ucontext_t *uc = ucontext;
     const char *code_name = si_code_str(info->si_code);
     char buf[512];
@@ -122,6 +123,8 @@ static void signal_handler(int signum, siginfo_t *info, void *ucontext)
     ++off;
 
     write(STDOUT_FILENO, buf, off);
+
+    errno = saved_errno;
 }
 
 int main(void)
