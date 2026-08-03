@@ -1,6 +1,7 @@
-# Compiled binaries and objects
+# Compiled binaries, objects and dependency files
 /bin/
 *.o
+*.d
 *.so
 *.a
 
