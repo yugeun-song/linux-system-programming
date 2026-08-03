@@ -140,8 +140,9 @@ int main(void)
     printf("main(): thread finished\n\n"
            "main(): --- signal handler (trylock) ---\n");
 
-    if (set_handler(handler_trylock) != 0)
+    if (set_handler(handler_trylock) != 0) {
         return EXIT_FAILURE;
+    }
 
     pthread_mutex_lock(&g_mutex);
     printf("main(): mutex locked, SIGALRM in 1 second\n");

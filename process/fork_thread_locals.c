@@ -140,9 +140,7 @@ int main(void)
     if (pid < 0) {
         LOG_PERROR(errno, "fork failed");
         return 1;
-    }
-
-    if (pid == 0) {
+    } else if (pid == 0) {
         child_report(caller_local);
         _exit(0);
     }
