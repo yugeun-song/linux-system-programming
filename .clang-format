@@ -20,6 +20,13 @@ AllowShortBlocksOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
+AllowShortCaseLabelsOnASingleLine: true
+AlignConsecutiveShortCaseStatements:
+    Enabled: true
+    AcrossEmptyLines: false
+    AcrossComments: false
+AlignConsecutiveMacros: Consecutive
+Cpp11BracedListStyle: false
 PointerAlignment: Right
 ColumnLimit: 100
 PenaltyExcessCharacter: 1
