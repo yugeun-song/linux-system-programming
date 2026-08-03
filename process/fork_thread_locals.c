@@ -71,7 +71,7 @@ static void *worker_routine(void *arg)
 
 static void child_report(int caller_local)
 {
-    char buf[1024];
+    char buf[256 + NUM_THREADS * 128];
     size_t off = 0;
     int i;
 
