@@ -1,9 +1,5 @@
 #define _GNU_SOURCE
 
-/* NOTICE: pthread_mutex_trylock() and pthread_mutex_timedlock() avoid deadlock
- * but are still NOT async-signal-safe (see signal-safety(7)). They work on
- * Linux/glibc as an implementation detail, not a portable guarantee. */
-
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,6 +11,9 @@
 #include "helper/log.h"
 
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* No pthread_mutex_* call is async-signal-safe (signal-safety(7)). trylock and timedlock only
+ * bound the wait; that they work here is a glibc detail, not a portable guarantee. */
 
 static void handler_lock(int signum)
 {

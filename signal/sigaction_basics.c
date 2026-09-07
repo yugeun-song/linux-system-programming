@@ -6,11 +6,11 @@
 
 #include "helper/log.h"
 
-/* NOTICE: Use 'volatile sig_atomic_t' instead of 'int' for the signal flag to ensure atomic access. */
+/* volatile forces a re-read each iteration; sig_atomic_t makes the handler's store indivisible. */
 static volatile sig_atomic_t g_is_running = 1;
 
-/* NOTICE: Only SIGKILL and SIGSTOP cannot be caught or blocked; all others can.
- * Returning from a SIGFPE/SIGILL/SIGSEGV/SIGBUS handler is undefined behavior. */
+/* Returning from a handler for a kernel-generated SIGFPE/SIGILL/SIGSEGV/SIGBUS is undefined;
+ * for one sent by kill(), raise() or sigqueue() it is defined. */
 static void signal_handler(int signum, siginfo_t *info, void *ucontext)
 {
     int saved_errno = errno;
