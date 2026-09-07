@@ -22,7 +22,10 @@ EXES = $(patsubst %.c, $(BIN_DIR)/%, $(EXE_SRCS))
 
 DEPS = $(LIB_OBJS:.o=.d) $(addsuffix .d, $(EXES))
 
-.PHONY: all clean compile_commands
+FMT_HDRS = $(wildcard $(addsuffix /*.h, $(LIB_DIRS) $(SRC_DIRS)))
+FMT_FILES = $(LIB_SRCS) $(EXE_SRCS) $(FMT_HDRS)
+
+.PHONY: all clean compile_commands format format-check
 
 all: $(EXES)
 
@@ -43,6 +46,12 @@ compile_commands:
 		sep=","; \
 	done
 	@printf ']\n' >> compile_commands.json
+
+format:
+	clang-format -i $(FMT_FILES)
+
+format-check:
+	clang-format --dry-run --Werror $(FMT_FILES)
 
 clean:
 	rm -rf $(BIN_DIR)
