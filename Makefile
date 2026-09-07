@@ -12,7 +12,7 @@ DB_FLAGS = $(STD) $(WARNINGS) $(DEBUG) -I.
 
 BIN_DIR = bin
 LIB_DIRS = helper
-SRC_DIRS = user process thread memory io network ipc signal time error
+SRC_DIRS = user process thread memory io ipc signal time error
 
 LIB_SRCS = $(wildcard $(addsuffix /*.c, $(LIB_DIRS)))
 LIB_OBJS = $(patsubst %.c, $(BIN_DIR)/%.o, $(LIB_SRCS))
