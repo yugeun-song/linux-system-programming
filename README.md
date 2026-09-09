@@ -56,7 +56,8 @@ does not state:
   A child leaving through `_exit()` writes no profile, so the fork examples produce one for the
   parent only.
 - The `-Wunused-parameter` warnings come from signal handlers and thread routines whose signatures
-  are fixed by the API. They stay visible rather than silenced.
+  are fixed by the API. The build keeps every `-Wunused-*` warning; `.clangd` suppresses them so
+  the editor stays quiet.
 
 `.clang-format` is LLVM base, 4-space, 100 col. `Cpp11BracedListStyle: false` is what makes braced
 initializers `{ content }` rather than `{content}`; `make format-check` enforces it.
