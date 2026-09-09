@@ -35,6 +35,13 @@ gmon.out
 qemu.log
 trace-events-all
 
+# ctags / cscope artifacts
+/tags
+cscope.files
+cscope.out
+cscope.in.out
+cscope.po.out
+
 # Clangd / LSP / Editor artifacts
 compile_commands.json
 .cache/

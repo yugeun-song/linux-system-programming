@@ -17,10 +17,10 @@ topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked
 
 ## Build
 
-Requires GCC, GNU Make and glibc, plus clang-format for the format targets. The glibc floor is
-2.30, for the `gettid()` wrapper; the GNU flavour of `strerror_r()` and the `uc_mcontext` layout
-`signal/siginfo_and_ucontext.c` reads are glibc-only at any version. That file also `#error`s
-outside x86_64, aarch64 and rv64.
+Requires GCC, GNU Make and glibc, plus clang-format for the format targets and Universal Ctags and
+cscope for the index targets. The glibc floor is 2.30, for the `gettid()` wrapper; the GNU flavour
+of `strerror_r()` and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are glibc-only
+at any version. That file also `#error`s outside x86_64, aarch64 and rv64.
 
 ```sh
 make
@@ -30,11 +30,13 @@ make clean
 
 | Target | Effect |
 |---|---|
-| `make` | build every `bin/<dir>/<name>` |
+| `make` | build every `bin/<dir>/<name>`, then write `compile_commands.json` |
 | `make compile_commands` | write `compile_commands.json` for clangd |
+| `make tags` | write `tags` |
+| `make cscope` | write `cscope.out` and its inverted index |
 | `make format` | `clang-format -i` over every source and header |
 | `make format-check` | `clang-format --dry-run --Werror`; nonzero on drift |
-| `make clean` | remove `bin/`, `compile_commands.json`, `gmon.out` |
+| `make clean` | remove `bin/`, `compile_commands.json`, `tags`, the cscope database, `gmon.out` |
 
 Flags live in the `Makefile` (`STD`, `WARNINGS`, `DEBUG`, `DEPFLAGS`, `CFLAGS`, `LDFLAGS`). What it
 does not state:
@@ -44,7 +46,11 @@ does not state:
   timing.
 - `-MMD -MP` puts `.d` files beside the objects and executables in `bin/`, so editing
   `helper/log.h` rebuilds everything that includes it.
-- `-I.` is what makes `#include "helper/log.h"` resolve from the project root.
+- `-I.` is what makes `#include "helper/log.h"` resolve from the project root. clangd reads it from
+  `compile_commands.json`, which is why `make` writes it rather than leaving it to a separate
+  target; until that file exists clangd has no include path and every include of it is an error.
+- `make cscope` omits `-k`, so the database also covers the `/usr/include` headers the sources pull
+  in, and `cscope -L -1 sigaction` lands on the glibc declaration. `make tags` stays in-tree.
 - `-pg`: every program writes its profile as `gmon.out` in the directory it was run from, under
   that one name. Run them from separate directories or set `GMON_OUT_PREFIX` to keep more than one.
   A child leaving through `_exit()` writes no profile, so the fork examples produce one for the

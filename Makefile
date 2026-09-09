@@ -10,9 +10,13 @@ LDFLAGS = -pthread
 
 DB_FLAGS = $(STD) $(WARNINGS) $(DEBUG) -I.
 
+CTAGSFLAGS = --kinds-C=+px
+CSCOPEFLAGS = -b -q
+
 BIN_DIR = bin
 LIB_DIRS = helper
 SRC_DIRS = user process thread memory io ipc signal time error
+DIRS = $(LIB_DIRS) $(SRC_DIRS)
 
 LIB_SRCS = $(wildcard $(addsuffix /*.c, $(LIB_DIRS)))
 LIB_OBJS = $(patsubst %.c, $(BIN_DIR)/%.o, $(LIB_SRCS))
@@ -22,12 +26,12 @@ EXES = $(patsubst %.c, $(BIN_DIR)/%, $(EXE_SRCS))
 
 DEPS = $(LIB_OBJS:.o=.d) $(addsuffix .d, $(EXES))
 
-FMT_HDRS = $(wildcard $(addsuffix /*.h, $(LIB_DIRS) $(SRC_DIRS)))
-FMT_FILES = $(LIB_SRCS) $(EXE_SRCS) $(FMT_HDRS)
+HDRS = $(wildcard $(addsuffix /*.h, $(LIB_DIRS) $(SRC_DIRS)))
+SRCS = $(LIB_SRCS) $(EXE_SRCS) $(HDRS)
 
-.PHONY: all clean compile_commands format format-check
+.PHONY: all clean compile_commands cscope format format-check
 
-all: $(EXES)
+all: $(EXES) compile_commands.json
 
 $(BIN_DIR)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -37,24 +41,36 @@ $(BIN_DIR)/%: %.c $(LIB_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $< $(LIB_OBJS) -o $@ $(LDFLAGS)
 
-compile_commands:
-	@printf '[\n' > compile_commands.json
+compile_commands: compile_commands.json
+
+compile_commands.json: $(LIB_SRCS) $(EXE_SRCS) $(DIRS) Makefile
+	@printf '[\n' > $@
 	@sep=" "; for src in $(LIB_SRCS) $(EXE_SRCS); do \
 		printf '%s{ "directory": "%s", "file": "%s", "command": "%s %s -c %s" }\n' \
 			"$$sep" "$(CURDIR)" "$$src" "$(CC)" "$(DB_FLAGS)" "$$src" \
-			>> compile_commands.json; \
+			>> $@; \
 		sep=","; \
 	done
-	@printf ']\n' >> compile_commands.json
+	@printf ']\n' >> $@
+
+tags: $(SRCS) $(DIRS)
+	ctags $(CTAGSFLAGS) -f $@ $(SRCS)
+
+cscope: cscope.out
+
+cscope.out: $(SRCS) $(DIRS)
+	@printf '%s\n' $(SRCS) > cscope.files
+	cscope $(CSCOPEFLAGS) -i cscope.files
 
 format:
-	clang-format -i $(FMT_FILES)
+	clang-format -i $(SRCS)
 
 format-check:
-	clang-format --dry-run --Werror $(FMT_FILES)
+	clang-format --dry-run --Werror $(SRCS)
 
 clean:
 	rm -rf $(BIN_DIR)
 	rm -f gmon.out compile_commands.json
+	rm -f tags cscope.files cscope.out cscope.in.out cscope.po.out
 
 -include $(DEPS)
