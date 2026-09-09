@@ -2,6 +2,7 @@
 /bin/
 *.o
 *.d
+!.ctags.d/
 *.so
 *.a
 
@@ -35,12 +36,13 @@ gmon.out
 qemu.log
 trace-events-all
 
-# ctags / cscope artifacts
-/tags
-cscope.files
+# Symbol databases; the default `make` builds them, `clean` removes them
+tags
+TAGS
 cscope.out
 cscope.in.out
 cscope.po.out
+cscope.files
 
 # Clangd / LSP / Editor artifacts
 compile_commands.json

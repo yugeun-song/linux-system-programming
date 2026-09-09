@@ -1,0 +1,10 @@
+--map-C=+.h
+--map-C++=-.h
+--kinds-C=+px
+--fields=+iaSKlnzt
+--extras=+q
+--tag-relative=yes
+--sort=yes
+--exclude=bin
+--exclude=tags
+--exclude=cscope.*

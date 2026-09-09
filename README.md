@@ -30,13 +30,14 @@ make clean
 
 | Target | Effect |
 |---|---|
-| `make` | build every `bin/<dir>/<name>`, then write `compile_commands.json` |
-| `make compile_commands` | write `compile_commands.json` for clangd |
-| `make tags` | write `tags` |
-| `make cscope` | write `cscope.out` and its inverted index |
+| `make` | build every `bin/<dir>/<name>`, plus `tags`, `cscope.out` and `compile_commands.json` |
+| `make symbols` | the symbol index on its own |
+| `make tags` | ctags only |
+| `make cscope` | cscope only |
+| `make compdb` | `compile_commands.json` only |
 | `make format` | `clang-format -i` over every source and header |
 | `make format-check` | `clang-format --dry-run --Werror`; nonzero on drift |
-| `make clean` | remove `bin/`, `compile_commands.json`, `tags`, the cscope database, `gmon.out` |
+| `make clean` | remove `bin/`, the symbol index and `gmon.out` |
 
 Flags live in the `Makefile` (`STD`, `WARNINGS`, `DEBUG`, `DEPFLAGS`, `CFLAGS`, `LDFLAGS`). What it
 does not state:
@@ -47,10 +48,11 @@ does not state:
 - `-MMD -MP` puts `.d` files beside the objects and executables in `bin/`, so editing
   `helper/log.h` rebuilds everything that includes it.
 - `-I.` is what makes `#include "helper/log.h"` resolve from the project root. clangd reads it from
-  `compile_commands.json`, which is why `make` writes it rather than leaving it to a separate
-  target; until that file exists clangd has no include path and every include of it is an error.
-- `make cscope` omits `-k`, so the database also covers the `/usr/include` headers the sources pull
-  in, and `cscope -L -1 sigaction` lands on the glibc declaration. `make tags` stays in-tree.
+  `compile_commands.json`, a file target of the default build rather than a command to remember;
+  left to a separate command it went ungenerated and clangd reported 40 errors over the tree.
+- `.ctags.d/default.ctags` holds the ctags settings, so an editor invoking ctags itself indexes the
+  tree the way `make tags` does. `cscope -bkqu` skips `/usr/include`, so a query answers about this
+  tree instead of libc; the `u` forces a full rebuild past cscope's whole-second mtime comparison.
 - `-pg`: every program writes its profile as `gmon.out` in the directory it was run from, under
   that one name. Run them from separate directories or set `GMON_OUT_PREFIX` to keep more than one.
   A child leaving through `_exit()` writes no profile, so the fork examples produce one for the
