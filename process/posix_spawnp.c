@@ -1,6 +1,5 @@
 #include <errno.h>
 #include <spawn.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -9,48 +8,39 @@
 
 #define SHELL_SIGNAL_BASE 128
 
-extern char **environ;
-
-static void parent_routine(void)
-{
-    printf("parent_routine(): [%d] running as parent\n", getpid());
-}
-
 int main(void)
 {
     pid_t pid;
-    char *child_argv[] = { "ls", NULL };
+    char *child_argv[] = { "ls", "-al", NULL };
     int exit_code = 0;
-    int spawn_ret;
+    int spawn_result;
 
-    setvbuf(stdout, NULL, _IOLBF, 0);
+    spawn_result = posix_spawnp(&pid, "ls", NULL, NULL, child_argv, NULL);
 
-    spawn_ret = posix_spawnp(&pid, "ls", NULL, NULL, child_argv, environ);
+    if (spawn_result == 0) {
+        int child_status;
 
-    if (spawn_ret == 0) {
-        int status;
+        LOG_INFO("running as parent");
 
-        parent_routine();
-
-        while (waitpid(pid, &status, 0) == -1) {
+        while (waitpid(pid, &child_status, 0) == -1) {
             if (errno != EINTR) {
                 LOG_PERROR(errno, "waitpid failed");
                 return 1;
             }
         }
 
-        if (WIFEXITED(status)) {
-            printf("main(): return code is %d\n", WEXITSTATUS(status));
-            exit_code = WEXITSTATUS(status);
-        } else if (WIFSIGNALED(status)) {
-            printf("main(): terminated by signal %d\n", WTERMSIG(status));
-            exit_code = SHELL_SIGNAL_BASE + WTERMSIG(status);
+        if (WIFEXITED(child_status)) {
+            LOG_INFO("child return code is %d", WEXITSTATUS(child_status));
+            exit_code = WEXITSTATUS(child_status);
+        } else if (WIFSIGNALED(child_status)) {
+            LOG_INFO("child terminated by signal %d", WTERMSIG(child_status));
+            exit_code = SHELL_SIGNAL_BASE + WTERMSIG(child_status);
         } else {
-            LOG_ERR("abnormal termination");
+            LOG_ERR("child terminated abnormally");
             exit_code = 1;
         }
     } else {
-        LOG_PERROR(spawn_ret, "posix_spawnp failed");
+        LOG_PERROR(spawn_result, "posix_spawnp failed");
         exit_code = 1;
     }
 

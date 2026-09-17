@@ -1,9 +1,7 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/ucontext.h>
@@ -23,54 +21,9 @@
 #error "unsupported architecture (need x86_64, aarch64, or rv64)"
 #endif
 
-static size_t put_lit(char *buf, size_t off, const char *s, size_t n)
+static const char *si_code_to_str(int si_code)
 {
-    memcpy(buf + off, s, n);
-    return off + n;
-}
-
-static size_t put_dec(char *buf, size_t off, unsigned long long v)
-{
-    char tmp[20];
-    size_t n = 0;
-
-    if (v == 0) {
-        buf[off] = '0';
-        return off + 1;
-    }
-    while (v != 0) {
-        tmp[n] = (char)('0' + (v % 10));
-        ++n;
-        v /= 10;
-    }
-    while (n > 0) {
-        --n;
-        buf[off] = tmp[n];
-        ++off;
-    }
-    return off;
-}
-
-static size_t put_hex64(char *buf, size_t off, unsigned long long v)
-{
-    int i;
-    unsigned int nibble;
-
-    for (i = 60; i >= 0; i -= 4) {
-        nibble = (unsigned int)(v >> i) & 0xfu;
-        if (nibble < 10u) {
-            buf[off] = (char)('0' + (int)nibble);
-        } else {
-            buf[off] = (char)('a' + (int)nibble - 10);
-        }
-        ++off;
-    }
-    return off;
-}
-
-static const char *si_code_str(int code)
-{
-    switch (code) {
+    switch (si_code) {
     case SI_USER:    return "SI_USER";
     case SI_KERNEL:  return "SI_KERNEL";
     case SI_QUEUE:   return "SI_QUEUE";
@@ -87,42 +40,9 @@ static void signal_handler(int signum, siginfo_t *info, void *ucontext)
 {
     int saved_errno = errno;
     const ucontext_t *uc = ucontext;
-    const char *code_name = si_code_str(info->si_code);
-    char buf[512];
-    size_t off = 0;
 
-    static const char l1[] = "signal_handler(): signum=";
-    static const char l2[] = "                  si_code=";
-    static const char l3[] = "                  si_pid=";
-    static const char l4[] = "                  pc=0x";
-    static const char l5[] = "                  sp=0x";
-
-    off = put_lit(buf, off, l1, sizeof(l1) - 1);
-    off = put_dec(buf, off, (unsigned long long)(unsigned int)signum);
-    buf[off] = '\n';
-    ++off;
-
-    off = put_lit(buf, off, l2, sizeof(l2) - 1);
-    off = put_lit(buf, off, code_name, strlen(code_name));
-    buf[off] = '\n';
-    ++off;
-
-    off = put_lit(buf, off, l3, sizeof(l3) - 1);
-    off = put_dec(buf, off, (unsigned long long)(unsigned int)info->si_pid);
-    buf[off] = '\n';
-    ++off;
-
-    off = put_lit(buf, off, l4, sizeof(l4) - 1);
-    off = put_hex64(buf, off, UC_PC(uc));
-    buf[off] = '\n';
-    ++off;
-
-    off = put_lit(buf, off, l5, sizeof(l5) - 1);
-    off = put_hex64(buf, off, UC_SP(uc));
-    buf[off] = '\n';
-    ++off;
-
-    write(STDOUT_FILENO, buf, off);
+    LOG_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx", signum,
+             si_code_to_str(info->si_code), info->si_pid, UC_PC(uc), UC_SP(uc));
 
     errno = saved_errno;
 }
@@ -132,8 +52,6 @@ int main(void)
     struct sigaction sa = { 0 };
     sa.sa_sigaction = signal_handler;
     sa.sa_flags = SA_SIGINFO;
-
-    setvbuf(stdout, NULL, _IOLBF, 0);
 
     if (sigemptyset(&sa.sa_mask) == -1) {
         LOG_PERROR(errno, "failed to initialize signal set with sigemptyset");
@@ -145,13 +63,13 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-    printf("main(): raising SIGINT to inspect signal context\n");
+    LOG_INFO("raising SIGINT to inspect signal context");
 
     if (raise(SIGINT) != 0) {
         LOG_PERROR(errno, "failed to raise SIGINT");
         return EXIT_FAILURE;
     }
 
-    printf("main(): finished\n");
+    LOG_INFO("finished");
     return EXIT_SUCCESS;
 }

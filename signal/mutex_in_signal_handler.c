@@ -1,7 +1,6 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
 #include <time.h>
@@ -10,22 +9,19 @@
 
 #include "utils/log.h"
 
-static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_mutex;
 
 /* No pthread_mutex_* call is async-signal-safe (signal-safety(7)). trylock and timedlock only
  * bound the wait; that they work here is a glibc detail, not a portable guarantee. */
-
 static void handler_lock(int signum)
 {
     int saved_errno = errno;
 
-    const char m1[] = "handler_lock(): locking mutex...\n";
-    write(STDOUT_FILENO, m1, sizeof(m1) - 1);
+    LOG_INFO("locking mutex...");
 
     pthread_mutex_lock(&g_mutex);
 
-    const char m2[] = "handler_lock(): acquired mutex\n";
-    write(STDOUT_FILENO, m2, sizeof(m2) - 1);
+    LOG_INFO("acquired mutex");
 
     pthread_mutex_unlock(&g_mutex);
 
@@ -36,17 +32,14 @@ static void handler_trylock(int signum)
 {
     int saved_errno = errno;
 
-    const char m1[] = "handler_trylock(): trying mutex...\n";
-    write(STDOUT_FILENO, m1, sizeof(m1) - 1);
+    LOG_INFO("trying mutex...");
 
-    int rc = pthread_mutex_trylock(&g_mutex);
+    int return_code = pthread_mutex_trylock(&g_mutex);
 
-    if (rc == EBUSY) {
-        const char m2[] = "handler_trylock(): mutex busy (EBUSY)\n";
-        write(STDOUT_FILENO, m2, sizeof(m2) - 1);
-    } else if (rc == 0) {
-        const char m2[] = "handler_trylock(): acquired mutex\n";
-        write(STDOUT_FILENO, m2, sizeof(m2) - 1);
+    if (return_code == EBUSY) {
+        LOG_INFO("mutex busy (EBUSY)");
+    } else if (return_code == 0) {
+        LOG_INFO("acquired mutex");
         pthread_mutex_unlock(&g_mutex);
     }
 
@@ -56,22 +49,19 @@ static void handler_trylock(int signum)
 static void handler_timedlock(int signum)
 {
     int saved_errno = errno;
-    struct timespec ts;
+    struct timespec deadline;
 
-    const char m1[] = "handler_timedlock(): timed-locking mutex (1s timeout)...\n";
-    write(STDOUT_FILENO, m1, sizeof(m1) - 1);
+    LOG_INFO("timed-locking mutex (1s timeout)...");
 
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += 1;
+    clock_gettime(CLOCK_REALTIME, &deadline);
+    deadline.tv_sec += 1;
 
-    int rc = pthread_mutex_timedlock(&g_mutex, &ts);
+    int return_code = pthread_mutex_timedlock(&g_mutex, &deadline);
 
-    if (rc == ETIMEDOUT) {
-        const char m2[] = "handler_timedlock(): timed out (ETIMEDOUT)\n";
-        write(STDOUT_FILENO, m2, sizeof(m2) - 1);
-    } else if (rc == 0) {
-        const char m2[] = "handler_timedlock(): acquired mutex\n";
-        write(STDOUT_FILENO, m2, sizeof(m2) - 1);
+    if (return_code == ETIMEDOUT) {
+        LOG_INFO("timed out (ETIMEDOUT)");
+    } else if (return_code == 0) {
+        LOG_INFO("acquired mutex");
         pthread_mutex_unlock(&g_mutex);
     }
 
@@ -80,20 +70,20 @@ static void handler_timedlock(int signum)
 
 static void *thread_routine(void *arg)
 {
-    printf("thread_routine(): locking mutex...\n");
+    LOG_INFO("locking mutex...");
 
     pthread_mutex_lock(&g_mutex);
-    printf("thread_routine(): acquired mutex\n");
+    LOG_INFO("acquired mutex");
     pthread_mutex_unlock(&g_mutex);
 
     return NULL;
 }
 
-static int set_handler(void (*fn)(int))
+static int set_handler(void (*handler)(int))
 {
     struct sigaction sa = { 0 };
 
-    sa.sa_handler = fn;
+    sa.sa_handler = handler;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
         LOG_PERROR(errno, "sigemptyset failed");
@@ -111,71 +101,75 @@ static int set_handler(void (*fn)(int))
 int main(void)
 {
     pthread_t thread;
-    int rc;
+    int return_code;
 
-    setvbuf(stdout, NULL, _IOLBF, 0);
+    return_code = pthread_mutex_init(&g_mutex, NULL);
+    if (return_code != 0) {
+        LOG_PERROR(return_code, "pthread_mutex_init failed");
+        return EXIT_FAILURE;
+    }
 
-    printf("main(): --- normal thread ---\n");
+    LOG_INFO("--- normal thread ---");
 
     pthread_mutex_lock(&g_mutex);
-    printf("main(): mutex locked, creating thread\n");
+    LOG_INFO("mutex locked, creating thread");
 
-    rc = pthread_create(&thread, NULL, thread_routine, NULL);
-    if (rc != 0) {
-        LOG_PERROR(rc, "pthread_create failed");
+    return_code = pthread_create(&thread, NULL, thread_routine, NULL);
+    if (return_code != 0) {
+        LOG_PERROR(return_code, "pthread_create failed");
         return EXIT_FAILURE;
     }
 
     sleep(1);
-    printf("main(): releasing mutex\n");
+    LOG_INFO("releasing mutex");
     pthread_mutex_unlock(&g_mutex);
 
-    rc = pthread_join(thread, NULL);
-    if (rc != 0) {
-        LOG_PERROR(rc, "pthread_join failed");
+    return_code = pthread_join(thread, NULL);
+    if (return_code != 0) {
+        LOG_PERROR(return_code, "pthread_join failed");
         return EXIT_FAILURE;
     }
 
-    printf("main(): thread finished\n\n"
-           "main(): --- signal handler (trylock) ---\n");
+    LOG_INFO("thread finished");
+    LOG_INFO("--- signal handler (trylock) ---");
 
     if (set_handler(handler_trylock) != 0) {
         return EXIT_FAILURE;
     }
 
     pthread_mutex_lock(&g_mutex);
-    printf("main(): mutex locked, SIGALRM in 1 second\n");
+    LOG_INFO("mutex locked, SIGALRM in 1 second");
     alarm(1);
     sleep(3);
     pthread_mutex_unlock(&g_mutex);
 
-    printf("main(): resumed\n\n"
-           "main(): --- signal handler (timedlock, 1s timeout) ---\n");
+    LOG_INFO("resumed");
+    LOG_INFO("--- signal handler (timedlock, 1s timeout) ---");
 
     if (set_handler(handler_timedlock) != 0) {
         return EXIT_FAILURE;
     }
 
     pthread_mutex_lock(&g_mutex);
-    printf("main(): mutex locked, SIGALRM in 1 second\n");
+    LOG_INFO("mutex locked, SIGALRM in 1 second");
     alarm(1);
     sleep(3);
     pthread_mutex_unlock(&g_mutex);
 
-    printf("main(): resumed\n\n"
-           "main(): --- signal handler (lock) ---\n");
+    LOG_INFO("resumed");
+    LOG_INFO("--- signal handler (lock) ---");
 
     if (set_handler(handler_lock) != 0) {
         return EXIT_FAILURE;
     }
 
     pthread_mutex_lock(&g_mutex);
-    printf("main(): mutex locked, SIGALRM in 1 second\n");
+    LOG_INFO("mutex locked, SIGALRM in 1 second");
     alarm(1);
     sleep(3);
-
     pthread_mutex_unlock(&g_mutex);
-    printf("main(): done\n");
+
+    LOG_INFO("done");
 
     pthread_mutex_destroy(&g_mutex);
     return 0;
