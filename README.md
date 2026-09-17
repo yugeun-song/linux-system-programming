@@ -1,7 +1,7 @@
 # linux-system-programming
 
 Example programs for Linux system programming. Each `.c` in a topic directory builds to
-`bin/<dir>/<name>`; `helper/` is the exception, compiled as an object library and linked into every
+`bin/<dir>/<name>`; `utils/` is the exception, compiled as an object library and linked into every
 target. Sources are collected by wildcard, so a new example is just a `.c` dropped into an existing
 topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked.
 
@@ -9,18 +9,18 @@ topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked
 
 | Path | Contents |
 |---|---|
-| `helper/` | `log.c` `log.h` -- logging object library |
-| `process/` | `fork.c` `fork_and_waitpid.c` `fork_thread_locals.c` `posix_spawnp.c` |
+| `utils/` | `log.c` `log.h` -- async-signal-safe logging, an object library |
+| `process/` | `fork.c` `fork_thread_locals.c` `posix_spawnp.c` |
 | `signal/` | `sigaction_basics.c` `siginfo_and_ucontext.c` `mutex_in_signal_handler.c` |
 | `thread/` | `pthread_create.c` |
-| `error/ io/ ipc/ memory/ time/ user/` | empty; listed in `SRC_DIRS`, held by `.gitkeep` |
+| `io/ ipc/ memory/ time/ user/` | empty; listed in `SRC_DIRS`, held by `.gitkeep` |
 
 ## Build
 
 Requires GCC, GNU Make and glibc, plus clang-format for the format targets and Universal Ctags and
-cscope for the index targets. The glibc floor is 2.30, for the `gettid()` wrapper; the GNU flavour
-of `strerror_r()` and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are glibc-only
-at any version. That file also `#error`s outside x86_64, aarch64 and rv64.
+cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()`,
+`tm_gmtoff` and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions.
+That file also `#error`s outside x86_64, aarch64 and rv64.
 
 ```sh
 make
@@ -46,10 +46,12 @@ does not state:
 - `-O0 -ggdb3` with frame pointers kept: these binaries are for GDB, Valgrind and perf, not for
   timing.
 - `-MMD -MP` puts `.d` files beside the objects and executables in `bin/`, so editing
-  `helper/log.h` rebuilds everything that includes it.
-- `-I.` is what makes `#include "helper/log.h"` resolve from the project root. clangd reads it from
+  `utils/log.h` rebuilds everything that includes it.
+- `-I.` is what makes `#include "utils/log.h"` resolve from the project root. clangd reads it from
   `compile_commands.json`, a file target of the default build rather than a command to remember;
-  left to a separate command it went ungenerated and clangd reported 40 errors over the tree.
+  left to a separate command it went ungenerated and clangd reported 40 errors over the tree. A
+  source added before the next `make` borrows the flags of its nearest neighbour in the database,
+  so it parses cleanly too.
 - `.ctags.d/default.ctags` holds the ctags settings, so an editor invoking ctags itself indexes the
   tree the way `make tags` does. `cscope -bkqu` skips `/usr/include`, so a query answers about this
   tree instead of libc; the `u` forces a full rebuild past cscope's whole-second mtime comparison.
@@ -66,39 +68,42 @@ initializers `{ content }` rather than `{content}`; `make format-check` enforces
 
 ## Output
 
-| Context | Call | Destination |
-|---|---|---|
-| Narrative | `printf()` | stdout |
-| Diagnostics | `LOG_*` (`helper/log.h`) | stderr |
-| Signal handler, post-`fork()` child | `write()` | stdout |
-
-`LOG_PERROR(rc, ...)` and `LOG_PWARN(rc, ...)` take the error number as an argument, covering both C
-conventions in one call shape: pass `errno` after a call that sets it, or the return value of a
-`pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
-`log_emit()` renders it with the reentrant `strerror_r()`. `LOG_PWARN` marks a failure an example
-provokes on purpose, such as registering a handler for SIGKILL. The macros supply the timestamp,
-pid/tid, source location and function name; do not repeat those in the message.
+Every line an example prints goes through `LOG_*` (`utils/log.h`) to stderr, one `write()` per
+call; the examples use no stdio. `LOG_INFO` carries the narrative and `LOG_ERR` a failure without an
+error number. `LOG_PERROR(errnum, ...)` and `LOG_PWARN(errnum, ...)` take the number as an argument,
+covering both C conventions in one call shape: pass `errno` after a call that sets it, or the return
+value of a `pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
+`LOG_PWARN` marks a failure an example provokes on purpose, such as registering a handler for
+SIGKILL. The macros supply the timestamp, pid/tid, source location and function name; do not repeat
+those in the message.
 
 ## Signal safety
 
-- `LOG_*` is thread-safe -- each record is formatted into automatic buffers and handed to one
-  `write()` of at most 1023 bytes -- but not async-signal-safe. Never call it from a handler. Only
-  the short-write retry loop in `write_all()` can split a record.
-- In a handler, write with `write()` directly. `signal/sigaction_basics.c` emits fixed strings;
-  `signal/siginfo_and_ucontext.c` formats decimal and hex by hand. Both call only functions listed
-  in `signal-safety(7)`.
-- Handlers save `errno` on entry and restore it on exit. Otherwise the handler's `write()`
-  overwrites the value the interrupted code is about to read, and the next diagnostic reports the
-  wrong reason.
-- A handler's `write()` bypasses stdio, so every example that mixes the two makes stdout line
-  buffered with `setvbuf()` in `main()`. Without it, buffered `printf()` output appears after the
-  handler's writes whenever stdout is redirected.
+- `log_emit()` is async-signal-safe: no stdio, no lock, no `malloc`, no static state past a
+  constructor, one `write()` per call, `errno` preserved. It works in a signal handler, in the child
+  of a multithreaded `fork()` and from any thread; only the short-write retry loop in `write_all()`
+  can split a record between threads. `nm -u bin/utils/log.o` lists the whole call surface.
+- `utils/log.c` formats with its own `printf` subset: the C99 integer, character, string and
+  pointer conversions with flags, width, precision and length modifiers, plus `%m`, matching glibc's
+  `snprintf()` byte for byte. Floating-point conversions, `%lc`, `%ls`, `%n` and anything unknown
+  consume their argument and print the specifier verbatim, so later arguments stay aligned; log a
+  duration as an integer count of ns rather than a double. A NULL format prints `(null)`.
+- Nothing can block or crash the caller: a record is cut at 1023 bytes with its errno suffix and
+  newline kept, width and precision are clamped at 65535, an unknown errno reads `Unknown error`, a
+  closed or non-blocking stderr drops the record, and a broken pipe raises SIGPIPE like any other
+  `write()`.
+- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day from a UTC
+  offset a constructor caches at startup, so a DST or `TZ` change during the run does not move the
+  printed hour. A call takes under 2.5 KB of stack at `-O0 -pg`; on an alternate stack add the
+  kernel's signal frame per nesting level, `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on AVX-512.
+- Handlers still save `errno` on entry and restore it on exit, so whatever call they gain later
+  cannot overwrite the value the interrupted code is about to read.
 - `signal/mutex_in_signal_handler.c` is the deliberate counter-example, not a broken build. Its last
   stage relocks `g_mutex` from `handler_lock()` on the thread already holding it. POSIX leaves that
-  undefined for a default mutex and glibc deadlocks, so the run hangs and never reaches a flush,
-  which is why this example needs `setvbuf()` most. Its header comment covers the near miss:
-  `pthread_mutex_trylock()` and `pthread_mutex_timedlock()` bound the wait but are no safer.
-- After `fork()` the child path uses only `write()` and `_exit()`. `process/fork.c` shows the shape;
+  undefined for a default mutex and glibc deadlocks, so the run hangs after its last line. Its
+  header comment covers the near miss: `pthread_mutex_trylock()` and `pthread_mutex_timedlock()`
+  bound the wait but are no safer.
+- After `fork()` the child path uses only `LOG_*` and `_exit()`. `process/fork.c` shows the shape;
   `process/fork_thread_locals.c` is where it is mandatory, forking from the main thread of a process
-  with three live workers. `_exit()` also skips the stdio flush, so the child never re-emits the
-  inherited copy of the parent's output buffer.
+  with three live workers. `_exit()` keeps the child from running the parent's `atexit()` handlers
+  or flushing stdio it inherited, which matters as soon as a program does use stdio.
