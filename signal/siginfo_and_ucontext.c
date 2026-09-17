@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <sys/ucontext.h>
 
-#include "helper/log.h"
+#include "utils/log.h"
 
 #if defined(__x86_64__)
 #define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.gregs[REG_RIP])

@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "helper/log.h"
+#include "utils/log.h"
 
 #define SHELL_SIGNAL_BASE 128
 

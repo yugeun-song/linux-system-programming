@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "helper/log.h"
+#include "utils/log.h"
 
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 

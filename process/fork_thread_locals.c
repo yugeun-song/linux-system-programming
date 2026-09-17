@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "helper/log.h"
+#include "utils/log.h"
 
 #define NUM_THREADS 3
 

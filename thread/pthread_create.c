@@ -6,7 +6,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "helper/log.h"
+#include "utils/log.h"
 
 void *joinable_thread_routine(void *arg)
 {

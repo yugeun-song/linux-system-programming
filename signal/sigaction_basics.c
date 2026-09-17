@@ -4,7 +4,7 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "helper/log.h"
+#include "utils/log.h"
 
 /* volatile forces a re-read each iteration; sig_atomic_t makes the handler's store indivisible. */
 static volatile sig_atomic_t g_is_running = 1;

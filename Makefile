@@ -11,8 +11,8 @@ CTAGS = ctags
 CSCOPE = cscope
 
 BIN_DIR = bin
-LIB_DIRS = helper
-SRC_DIRS = user process thread memory io ipc signal time error
+LIB_DIRS = utils
+SRC_DIRS = user process thread memory io ipc signal time
 
 LIB_SRCS = $(wildcard $(addsuffix /*.c, $(LIB_DIRS)))
 LIB_OBJS = $(patsubst %.c, $(BIN_DIR)/%.o, $(LIB_SRCS))
