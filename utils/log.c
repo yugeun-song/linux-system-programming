@@ -478,9 +478,19 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
     elen = strlen(err_msg);
     cap = sizeof(buf) - elen - 1;
 
-    n = log_format(buf, cap, "%02d:%02d:%02d.%03ld [%-4s] [%d/%d] %s:%d %s(): ", (int)(sod / 3600),
-                   (int)(sod / 60 % 60), (int)(sod % 60), ts.tv_nsec / 1000000, level, getpid(),
-                   gettid(), file, line, func);
+    n = log_format(buf,
+                   cap,
+                   "%02d:%02d:%02d.%03ld [%-4s] [%d/%d] %s:%d %s(): ",
+                   (int)(sod / 3600),
+                   (int)(sod / 60 % 60),
+                   (int)(sod % 60),
+                   ts.tv_nsec / 1000000,
+                   level,
+                   getpid(),
+                   gettid(),
+                   file,
+                   line,
+                   func);
     if (n > cap - 1) {
         n = cap - 1;
     }

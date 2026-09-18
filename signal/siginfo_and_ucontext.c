@@ -41,8 +41,12 @@ static void signal_handler(int signum, siginfo_t *info, void *ucontext)
     int saved_errno = errno;
     const ucontext_t *uc = ucontext;
 
-    LOG_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx", signum,
-             si_code_to_str(info->si_code), info->si_pid, UC_PC(uc), UC_SP(uc));
+    LOG_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx",
+             signum,
+             si_code_to_str(info->si_code),
+             info->si_pid,
+             UC_PC(uc),
+             UC_SP(uc));
 
     errno = saved_errno;
 }

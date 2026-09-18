@@ -27,6 +27,7 @@ AlignConsecutiveShortCaseStatements:
     AcrossComments: false
 AlignConsecutiveMacros: Consecutive
 Cpp11BracedListStyle: false
+BinPackArguments: false
 PointerAlignment: Right
 ColumnLimit: 100
 PenaltyExcessCharacter: 1
