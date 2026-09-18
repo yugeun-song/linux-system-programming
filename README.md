@@ -75,7 +75,9 @@ covering both C conventions in one call shape: pass `errno` after a call that se
 value of a `pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
 `LOG_PWARN` marks a failure an example provokes on purpose, such as registering a handler for
 SIGKILL. The macros supply the timestamp, pid/tid, source location and function name; do not repeat
-those in the message.
+those in the message. A message may span lines: after each `\n` the next line is padded to the
+width of that record's prefix, and a blank line gets none. The `LOG_*_NO_PADDING` forms leave
+continuation lines at column 0.
 
 ## Signal safety
 
@@ -103,7 +105,7 @@ those in the message.
   undefined for a default mutex and glibc deadlocks, so the run hangs after its last line. Its
   header comment covers the near miss: `pthread_mutex_trylock()` and `pthread_mutex_timedlock()`
   bound the wait but are no safer.
-- After `fork()` the child path uses only `LOG_*` and `_exit()`. `process/fork.c` shows the shape;
-  `process/fork_thread_locals.c` is where it is mandatory, forking from the main thread of a process
-  with three live workers. `_exit()` keeps the child from running the parent's `atexit()` handlers
-  or flushing stdio it inherited, which matters as soon as a program does use stdio.
+- After `fork()` the child path uses only `LOG_*` and `_exit()`; `process/fork.c` and
+  `process/fork_thread_locals.c` both show the shape. `_exit()` keeps the child from running the
+  parent's `atexit()` handlers or flushing stdio it inherited, which matters as soon as a program
+  does use stdio.
