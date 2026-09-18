@@ -8,21 +8,14 @@
 
 static __thread int g_tls_value;
 
-static void child_report(int caller_tls_value)
+static void child_report(void)
 {
-    LOG_INFO("parent tls=%d\n"
-             "child tls=%d\n"
-             "tls preserved across fork=%s",
-             caller_tls_value,
-             g_tls_value,
-             g_tls_value == caller_tls_value ? "yes" : "no");
+    LOG_INFO("child tls=%d", g_tls_value);
 }
 
 int main(void)
 {
-    int caller_tls_value = 1000;
-
-    g_tls_value = caller_tls_value;
+    g_tls_value = 1000;
     LOG_INFO("forking with tls=%d", g_tls_value);
 
     pid_t pid = fork();
@@ -30,7 +23,7 @@ int main(void)
         LOG_PERROR(errno, "fork failed");
         return 1;
     } else if (pid == 0) {
-        child_report(caller_tls_value);
+        child_report();
         _exit(0);
     }
 
