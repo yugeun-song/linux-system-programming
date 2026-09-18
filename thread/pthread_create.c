@@ -1,5 +1,3 @@
-#include <stdint.h>
-
 #include <pthread.h>
 #include <unistd.h>
 
@@ -7,7 +5,7 @@
 
 void *joinable_thread_routine(void *arg)
 {
-    uintptr_t thread_exit_code = 13;
+    unsigned long *thread_exit_code = (unsigned long *)13;
     char *arg_msg = (char *)arg;
 
     LOG_INFO("received message %s", arg_msg);
@@ -30,8 +28,7 @@ int main(void)
     pthread_t detached_thread;
     pthread_attr_t detached_thread_attr;
 
-    uintptr_t joinable_thread_exit_code = 0;
-    void *joinable_thread_return_code;
+    void *joinable_thread_exit_code = NULL;
     char *arg_msg = "Hello, POSIX Thread!";
     int return_code;
 
@@ -61,13 +58,12 @@ int main(void)
 
     LOG_INFO("created the joinable and detached threads");
 
-    return_code = pthread_join(joinable_thread, &joinable_thread_return_code);
+    return_code = pthread_join(joinable_thread, &joinable_thread_exit_code);
     if (return_code != 0) {
         LOG_PERROR(return_code, "pthread_join failed");
         return 1;
     }
 
-    joinable_thread_exit_code = (uintptr_t)joinable_thread_return_code;
     LOG_INFO("joinable thread returned %lu", (unsigned long)joinable_thread_exit_code);
 
     pthread_attr_destroy(&detached_thread_attr);
