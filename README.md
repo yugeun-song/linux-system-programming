@@ -64,20 +64,32 @@ does not state:
   the editor stays quiet.
 
 `.clang-format` is LLVM base, 4-space, 100 col. `Cpp11BracedListStyle: false` is what makes braced
-initializers `{ content }` rather than `{content}`; `make format-check` enforces it.
+initializers `{ content }` rather than `{content}`. `BinPackArguments: false` keeps a call on one
+line while it fits in 100 columns and otherwise gives every argument a line of its own.
+`make format-check` enforces all of it.
 
 ## Output
 
 Every line an example prints goes through `LOG_*` (`utils/log.h`) to stderr, one `write()` per
-call; the examples use no stdio. `LOG_INFO` carries the narrative and `LOG_ERR` a failure without an
-error number. `LOG_PERROR(errnum, ...)` and `LOG_PWARN(errnum, ...)` take the number as an argument,
-covering both C conventions in one call shape: pass `errno` after a call that sets it, or the return
-value of a `pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
-`LOG_PWARN` marks a failure an example provokes on purpose, such as registering a handler for
-SIGKILL. The macros supply the timestamp, pid/tid, source location and function name; do not repeat
-those in the message. A message may span lines: after each `\n` the next line is padded to the
-width of that record's prefix, and a blank line gets none. The `LOG_*_NO_PADDING` forms leave
-continuation lines at column 0.
+call; the examples use no stdio. A record reads
+
+```text
+HH:MM:SS.mmm [LEVEL] [pid/tid] file:line func(): message: description (errno=N)
+```
+
+in local time, with `LEVEL` one of `INFO`, `WARN` and `ERR` padded to four columns, `tid` the kernel
+thread id from `gettid()`, and the errno tail present only when a number is passed.
+
+`LOG_INFO` carries the narrative and `LOG_ERR` a failure without an error number.
+`LOG_PERROR(errnum, ...)` and `LOG_PWARN(errnum, ...)` take the number as an argument, covering both
+C conventions in one call shape: pass `errno` after a call that sets it, or the return value of a
+`pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone. `LOG_PWARN`
+marks a failure an example provokes on purpose, such as registering a handler for SIGKILL. The
+macros supply everything before the message; do not repeat it there.
+
+A message may span lines: after each `\n` the next line is padded to the width of that record's
+prefix, and a blank line gets none. The `LOG_*_NO_PADDING` forms leave continuation lines at
+column 0. All ten macros expand to `LOG_EMIT(level, errnum, padding, ...)`.
 
 ## Signal safety
 
