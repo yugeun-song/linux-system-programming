@@ -20,6 +20,8 @@ struct outbuf {
     char *buf;
     size_t cap;
     size_t len;
+    size_t indent;
+    int at_line_start;
 };
 
 struct spec {
@@ -67,12 +69,31 @@ static ssize_t write_all(int fd, const void *buf, size_t count)
     return (ssize_t)count;
 }
 
-static void put_char(struct outbuf *ob, char c)
+static void put_raw(struct outbuf *ob, char c)
 {
     if (ob->len < ob->cap) {
         ob->buf[ob->len] = c;
     }
     ++ob->len;
+}
+
+static void put_char(struct outbuf *ob, char c)
+{
+    size_t i;
+
+    if (c == '\n') {
+        ob->at_line_start = 1;
+    } else if (ob->at_line_start) {
+        ob->at_line_start = 0;
+        for (i = 0; i < ob->indent; ++i) {
+            if (ob->len >= ob->cap) {
+                ob->len += ob->indent - i;
+                break;
+            }
+            put_raw(ob, ' ');
+        }
+    }
+    put_raw(ob, c);
 }
 
 static void put_mem(struct outbuf *ob, const char *s, size_t n)
@@ -212,9 +233,9 @@ static const char *errdesc(int errnum)
     return (desc != NULL) ? desc : "Unknown error";
 }
 
-static size_t log_vformat(char *buf, size_t cap, const char *fmt, va_list ap)
+static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt, va_list ap)
 {
-    struct outbuf ob = { buf, cap, 0 };
+    struct outbuf ob = { buf, cap, 0, indent, 0 };
     const char *p = (fmt != NULL) ? fmt : "(null)";
 
     while (*p != '\0') {
@@ -421,13 +442,14 @@ __attribute__((format(printf, 3, 4))) static size_t log_format(char *buf, size_t
     size_t n;
 
     va_start(ap, fmt);
-    n = log_vformat(buf, cap, fmt, ap);
+    n = log_vformat(buf, cap, 0, fmt, ap);
     va_end(ap);
 
     return n;
 }
 
-void log_emit(const char *level, const char *file, int line, const char *func, int errnum, const char *fmt, ...)
+void log_emit(const char *level, const char *file, int line, const char *func, int errnum,
+              enum log_padding padding, const char *fmt, ...)
 {
     int saved_errno = errno;
     char buf[1024];
@@ -439,6 +461,7 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
     va_list ap;
     size_t cap;
     size_t elen;
+    size_t indent;
     size_t n;
 
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -462,8 +485,10 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
         n = cap - 1;
     }
 
+    indent = (padding == LOG_PADDING_ON) ? n : 0;
+
     va_start(ap, fmt);
-    n += log_vformat(buf + n, cap - n, fmt, ap);
+    n += log_vformat(buf + n, cap - n, indent, fmt, ap);
     va_end(ap);
     if (n > cap - 1) {
         n = cap - 1;
