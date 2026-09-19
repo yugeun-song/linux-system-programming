@@ -41,12 +41,12 @@ static void signal_handler(int signum, siginfo_t *info, void *ucontext)
     int saved_errno = errno;
     const ucontext_t *uc = ucontext;
 
-    LOG_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx",
-             signum,
-             si_code_to_str(info->si_code),
-             info->si_pid,
-             UC_PC(uc),
-             UC_SP(uc));
+    PRINT_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx",
+               signum,
+               si_code_to_str(info->si_code),
+               info->si_pid,
+               UC_PC(uc),
+               UC_SP(uc));
 
     errno = saved_errno;
 }
@@ -58,22 +58,22 @@ int main(void)
     sa.sa_flags = SA_SIGINFO;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
-        LOG_PERROR(errno, "failed to initialize signal set with sigemptyset");
+        PRINT_PERROR(errno, "failed to initialize signal set with sigemptyset");
         return EXIT_FAILURE;
     }
 
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        LOG_PERROR(errno, "failed to register SIGINT handler");
+        PRINT_PERROR(errno, "failed to register SIGINT handler");
         return EXIT_FAILURE;
     }
 
-    LOG_INFO("raising SIGINT to inspect signal context");
+    PRINT_INFO("raising SIGINT to inspect signal context");
 
     if (raise(SIGINT) != 0) {
-        LOG_PERROR(errno, "failed to raise SIGINT");
+        PRINT_PERROR(errno, "failed to raise SIGINT");
         return EXIT_FAILURE;
     }
 
-    LOG_INFO("finished");
+    PRINT_INFO("finished");
     return EXIT_SUCCESS;
 }

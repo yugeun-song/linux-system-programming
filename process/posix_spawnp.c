@@ -20,27 +20,27 @@ int main(void)
     if (spawn_result == 0) {
         int child_status;
 
-        LOG_INFO("running as parent");
+        PRINT_INFO("running as parent");
 
         while (waitpid(pid, &child_status, 0) == -1) {
             if (errno != EINTR) {
-                LOG_PERROR(errno, "waitpid failed");
+                PRINT_PERROR(errno, "waitpid failed");
                 return 1;
             }
         }
 
         if (WIFEXITED(child_status)) {
-            LOG_INFO("child return code is %d", WEXITSTATUS(child_status));
+            PRINT_INFO("child return code is %d", WEXITSTATUS(child_status));
             exit_code = WEXITSTATUS(child_status);
         } else if (WIFSIGNALED(child_status)) {
-            LOG_INFO("child terminated by signal %d", WTERMSIG(child_status));
+            PRINT_INFO("child terminated by signal %d", WTERMSIG(child_status));
             exit_code = SHELL_SIGNAL_BASE + WTERMSIG(child_status);
         } else {
-            LOG_ERR("child terminated abnormally");
+            PRINT_ERR("child terminated abnormally");
             exit_code = 1;
         }
     } else {
-        LOG_PERROR(spawn_result, "posix_spawnp failed");
+        PRINT_PERROR(spawn_result, "posix_spawnp failed");
         exit_code = 1;
     }
 

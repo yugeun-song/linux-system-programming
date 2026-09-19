@@ -486,7 +486,7 @@ __attribute__((format(printf, 3, 4))) static size_t log_format(char *buf, size_t
 }
 
 void log_emit(const char *level, const char *file, int line, const char *func, int errnum,
-              enum log_padding padding, const char *fmt, ...)
+              enum print_padding padding, const char *fmt, ...)
 {
     int saved_errno = errno;
     char buf[1024];
@@ -532,7 +532,7 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
         n = cap - 1;
     }
 
-    indent = (padding == LOG_PADDING_ON) ? n : 0;
+    indent = (padding == PRINT_PADDING_ON) ? n : 0;
 
     va_start(ap, fmt);
     n += log_vformat(buf + n, cap - n, indent, fmt, ap);

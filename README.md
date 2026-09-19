@@ -73,11 +73,10 @@ line while it fits in 100 columns and otherwise gives every argument a line of i
 
 ## Output
 
-Every line an example prints goes through `LOG_*` (`utils/log.h`) to descriptor 2, whatever it
+Every line an example prints goes through `PRINT_*()` (`utils/log.h`) to descriptor 2, whatever it
 is at the time, one `write()` per call; the examples use no stdio. glibc's `fprintf(stderr, ...)`
 issues one `write()` per conversion, so its lines tear under contention where the logger's stay
-whole. `<syslog.h>` defines `LOG_INFO`, `LOG_ERR` and `LOG_PERROR` too, so the two headers cannot
-share a translation unit. A record reads
+whole. The `PRINT_` prefix stays clear of `<syslog.h>`, which owns the `LOG_*` names. A record reads
 
 ```text
 HH:MM:SS.mmm [LEVEL] [pid/tid] file:line func(): message: description (errno=N)
@@ -87,16 +86,16 @@ in UTC from the raw POSIX clock, with `LEVEL` one of `INFO`, `WARN` and `ERR` pa
 columns, `tid` the kernel thread id from `gettid()`, and the errno tail present only when a number
 is passed.
 
-`LOG_INFO` carries the narrative and `LOG_ERR` a failure without an error number.
-`LOG_PERROR(errnum, ...)` and `LOG_PWARN(errnum, ...)` take the number as an argument, covering both
-C conventions in one call shape: pass `errno` after a call that sets it, or the return value of a
-`pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone. `LOG_PWARN`
-marks a failure an example provokes on purpose, such as registering a handler for SIGKILL. The
-macros supply everything before the message; do not repeat it there.
+`PRINT_INFO()` carries the narrative and `PRINT_ERR()` a failure without an error number.
+`PRINT_PERROR(errnum, ...)` and `PRINT_PWARN(errnum, ...)` take the number as an argument, covering
+both C conventions in one call shape: pass `errno` after a call that sets it, or the return value of
+a `pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
+`PRINT_PWARN()` marks a failure an example provokes on purpose, such as registering a handler for
+SIGKILL. The macros supply everything before the message; do not repeat it there.
 
 A message may span lines: after each `\n` the next line is padded to the width of that record's
-prefix, and a blank line gets none. The `LOG_*_NO_PADDING` forms leave continuation lines at
-column 0. All ten macros expand to `LOG_EMIT(level, errnum, padding, ...)`.
+prefix, and a blank line gets none. The `PRINT_*_NO_PADDING()` forms leave continuation lines at
+column 0. All ten macros expand to `PRINT_EMIT(level, errnum, padding, ...)`.
 
 ## Signal safety
 
@@ -131,7 +130,7 @@ column 0. All ten macros expand to `LOG_EMIT(level, errnum, padding, ...)`.
   undefined for a default mutex and glibc deadlocks, so the run hangs after its last line. Its
   header comment covers the near miss: `pthread_mutex_trylock()` and `pthread_mutex_timedlock()`
   bound the wait but are no safer.
-- After `fork()` the child path uses only `LOG_*` and `_exit()`; `process/fork.c` and
+- After `fork()` the child path uses only `PRINT_*()` and `_exit()`; `process/fork.c` and
   `process/fork_thread_locals.c` both show the shape. `_exit()` keeps the child from running the
   parent's `atexit()` handlers or flushing stdio it inherited, which matters as soon as a program
   does use stdio.
