@@ -6,7 +6,7 @@ DEBUG = -pg -O0 -ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fasy
 DEPFLAGS = -MMD -MP
 
 CFLAGS = $(STD) $(WARNINGS) $(DEBUG) $(DEPFLAGS) -I.
-LDFLAGS = -pthread
+LDFLAGS = -pthread -Wl,-z,now
 CTAGS = ctags
 CSCOPE = cscope
 
