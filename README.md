@@ -18,8 +18,8 @@ topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked
 ## Build
 
 Requires GCC, GNU Make and glibc, plus clang-format for the format targets and Universal Ctags and
-cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()`,
-`tm_gmtoff` and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions.
+cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()` and
+the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions.
 That file also `#error`s outside x86_64, aarch64 and rv64.
 
 ```sh
@@ -43,6 +43,9 @@ Flags live in the `Makefile` (`STD`, `WARNINGS`, `DEBUG`, `DEPFLAGS`, `CFLAGS`, 
 does not state:
 
 - `-std=gnu99` is pinned so the build does not shift with the compiler's default.
+- `-Wl,-z,now` binds every PLT entry before `main()`. With lazy binding the first call of a libc
+  function from a signal handler would run the dynamic linker's resolver inside the handler, which
+  is not async-signal-safe; anything else that links `utils/log.c` needs the same flag.
 - `-O0 -ggdb3` with frame pointers kept: these binaries are for GDB, Valgrind and perf, not for
   timing.
 - `-MMD -MP` puts `.d` files beside the objects and executables in `bin/`, so editing
@@ -70,15 +73,19 @@ line while it fits in 100 columns and otherwise gives every argument a line of i
 
 ## Output
 
-Every line an example prints goes through `LOG_*` (`utils/log.h`) to stderr, one `write()` per
-call; the examples use no stdio. A record reads
+Every line an example prints goes through `LOG_*` (`utils/log.h`) to descriptor 2, whatever it
+is at the time, one `write()` per call; the examples use no stdio. glibc's `fprintf(stderr, ...)`
+issues one `write()` per conversion, so its lines tear under contention where the logger's stay
+whole. `<syslog.h>` defines `LOG_INFO`, `LOG_ERR` and `LOG_PERROR` too, so the two headers cannot
+share a translation unit. A record reads
 
 ```text
 HH:MM:SS.mmm [LEVEL] [pid/tid] file:line func(): message: description (errno=N)
 ```
 
-in local time, with `LEVEL` one of `INFO`, `WARN` and `ERR` padded to four columns, `tid` the kernel
-thread id from `gettid()`, and the errno tail present only when a number is passed.
+in UTC from the raw POSIX clock, with `LEVEL` one of `INFO`, `WARN` and `ERR` padded to four
+columns, `tid` the kernel thread id from `gettid()`, and the errno tail present only when a number
+is passed.
 
 `LOG_INFO` carries the narrative and `LOG_ERR` a failure without an error number.
 `LOG_PERROR(errnum, ...)` and `LOG_PWARN(errnum, ...)` take the number as an argument, covering both
@@ -93,23 +100,30 @@ column 0. All ten macros expand to `LOG_EMIT(level, errnum, padding, ...)`.
 
 ## Signal safety
 
-- `log_emit()` is async-signal-safe: no stdio, no lock, no `malloc`, no static state past a
-  constructor, one `write()` per call, `errno` preserved. It works in a signal handler, in the child
-  of a multithreaded `fork()` and from any thread; only the short-write retry loop in `write_all()`
-  can split a record between threads. `nm -u bin/utils/log.o` lists the whole call surface.
+- `log_emit()` is async-signal-safe: no stdio, no lock, no `malloc`, no static state, one `write()`
+  per call, `errno` and the signal mask preserved. It works in a signal handler, in the child of a
+  multithreaded `fork()` and from any thread; only the short-write retry loop in `write_all()` can
+  split a record between threads. `nm -u bin/utils/log.o` lists the call surface; a record costs six
+  system calls.
 - `utils/log.c` formats with its own `printf` subset: the C99 integer, character, string and
-  pointer conversions with flags, width, precision and length modifiers, plus `%m`, matching glibc's
-  `snprintf()` byte for byte. Floating-point conversions, `%lc`, `%ls`, `%n` and anything unknown
-  consume their argument and print the specifier verbatim, so later arguments stay aligned; log a
-  duration as an integer count of ns rather than a double. A NULL format prints `(null)`.
+  pointer conversions with flags, width, precision and length modifiers (`L` and `q` read as `ll`,
+  as glibc does), plus `%m`, matching glibc's `snprintf()` byte for byte. Floating-point
+  conversions, `%lc`, `%ls`, `%n` and anything unknown consume their argument and print the
+  specifier verbatim, so later arguments stay aligned; log a duration as an integer count of ns
+  rather than a double. A NULL format prints `(null)`.
 - Nothing can block or crash the caller: a record is cut at 1023 bytes with its errno suffix and
   newline kept, width and precision are clamped at 65535, an unknown errno reads `Unknown error`, a
-  closed or non-blocking stderr drops the record, and a broken pipe raises SIGPIPE like any other
-  `write()`.
-- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day from a UTC
-  offset a constructor caches at startup, so a DST or `TZ` change during the run does not move the
-  printed hour. A call takes under 2.5 KB of stack at `-O0 -pg`; on an alternate stack add the
-  kernel's signal frame per nesting level, `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on AVX-512.
+  closed or non-blocking stderr drops the record, and so do a broken pipe and a file at
+  `RLIMIT_FSIZE`: `write_all()` blocks SIGPIPE and SIGXFSZ around the `write()` and consumes the one
+  its own `write()` raised, leaving any the program had pending, so logging never kills the process.
+  Under a seccomp filter that denies `rt_sigtimedwait` it leaves that signal blocked instead; only a
+  filter that denies `rt_sigprocmask` leaves nothing to do, as for any program. On a pipe or a unix
+  stream socket a record of at most 1023 bytes is delivered whole or not at all, even with
+  `O_NONBLOCK`; only a tty can split one when a signal interrupts a partial write.
+- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day is UTC
+  straight from `CLOCK_REALTIME`, so the logger never calls `tzset()` or `localtime_r()`. A call
+  takes under 2.5 KB of stack at `-O0 -pg`; on an alternate stack add the kernel's signal frame per
+  nesting level, `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on AVX-512.
 - Handlers still save `errno` on entry and restore it on exit, so whatever call they gain later
   cannot overwrite the value the interrupted code is about to read.
 - `signal/mutex_in_signal_handler.c` is the deliberate counter-example, not a broken build. Its last
