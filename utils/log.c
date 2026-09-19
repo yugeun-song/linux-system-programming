@@ -2,6 +2,7 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -36,23 +37,23 @@ struct spec {
     char conv;
 };
 
-static long g_gmtoff;
-
-__attribute__((constructor(101))) static void log_init(void)
-{
-    time_t now = time(NULL);
-    struct tm tm = { 0 };
-
-    tzset();
-    if (localtime_r(&now, &tm) != NULL) {
-        g_gmtoff = tm.tm_gmtoff;
-    }
-}
-
 static ssize_t write_all(int fd, const void *buf, size_t count)
 {
     const char *ptr = buf;
     size_t left = count;
+    struct timespec zero = { 0, 0 };
+    sigset_t guard;
+    sigset_t old_set;
+    sigset_t pending;
+    siginfo_t si;
+    int raised = 0;
+
+    sigemptyset(&guard);
+    sigaddset(&guard, SIGPIPE);
+    sigaddset(&guard, SIGXFSZ);
+    sigemptyset(&pending);
+    sigpending(&pending);
+    pthread_sigmask(SIG_BLOCK, &guard, &old_set);
 
     while (left > 0) {
         ssize_t n = write(fd, ptr, left);
@@ -60,13 +61,44 @@ static ssize_t write_all(int fd, const void *buf, size_t count)
             if (n < 0 && errno == EINTR) {
                 continue;
             }
-            return -1;
+            if (n < 0 && errno == EPIPE) {
+                raised = SIGPIPE;
+            } else if (n < 0 && errno == EFBIG) {
+                raised = SIGXFSZ;
+            }
+            break;
         }
         left -= (size_t)n;
         ptr += n;
     }
 
-    return (ssize_t)count;
+    if (raised != 0) {
+        sigset_t one;
+        int was_pending = sigismember(&pending, raised);
+        int ours = !was_pending;
+
+        sigemptyset(&one);
+        sigaddset(&one, raised);
+        if (sigtimedwait(&one, &si, &zero) == raised) {
+            if (!ours) {
+                sigemptyset(&pending);
+                sigpending(&pending);
+                ours = si.si_code == SI_USER && si.si_pid == getpid() && sigismember(&pending, raised);
+            }
+            if (!ours) {
+                raise(raised);
+            }
+        } else if (ours) {
+            sigemptyset(&pending);
+            sigpending(&pending);
+            if (sigismember(&pending, raised)) {
+                sigaddset(&old_set, raised);
+            }
+        }
+    }
+    pthread_sigmask(SIG_SETMASK, &old_set, NULL);
+
+    return (left == 0) ? (ssize_t)count : -1;
 }
 
 static void put_raw(struct outbuf *ob, char c)
@@ -332,6 +364,9 @@ static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt,
         } else if (*p == 'L') {
             ++p;
             sp.len = LEN_BIG_L;
+        } else if (*p == 'q') {
+            ++p;
+            sp.len = LEN_LL;
         }
 
         sp.conv = *p;
@@ -347,16 +382,17 @@ static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt,
             long long v;
 
             switch (sp.len) {
-            case LEN_HH: v = (signed char)va_arg(ap, int); break;
-            case LEN_H:  v = (short)va_arg(ap, int); break;
-            case LEN_L:  v = va_arg(ap, long); break;
-            case LEN_LL: v = va_arg(ap, long long); break;
-            case LEN_Z:  v = va_arg(ap, ssize_t); break;
-            case LEN_J:  v = va_arg(ap, intmax_t); break;
-            case LEN_T:  v = va_arg(ap, ptrdiff_t); break;
-            default:     v = va_arg(ap, int); break;
+            case LEN_HH:    v = (signed char)va_arg(ap, int); break;
+            case LEN_H:     v = (short)va_arg(ap, int); break;
+            case LEN_L:     v = va_arg(ap, long); break;
+            case LEN_LL:
+            case LEN_BIG_L: v = va_arg(ap, long long); break;
+            case LEN_Z:     v = va_arg(ap, ssize_t); break;
+            case LEN_J:     v = va_arg(ap, intmax_t); break;
+            case LEN_T:     v = va_arg(ap, ptrdiff_t); break;
+            default:        v = va_arg(ap, int); break;
             }
-            conv_int(&ob, &sp, v < 0, (v < 0) ? 0ULL - (unsigned long long)v : (unsigned long long)v);
+            conv_int(&ob, &sp, v < 0, (v < 0) ? (unsigned long long)(-(v + 1)) + 1 : (unsigned long long)v);
             break;
         }
         case 'u':
@@ -366,14 +402,15 @@ static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt,
             unsigned long long v;
 
             switch (sp.len) {
-            case LEN_HH: v = (unsigned char)va_arg(ap, unsigned int); break;
-            case LEN_H:  v = (unsigned short)va_arg(ap, unsigned int); break;
-            case LEN_L:  v = va_arg(ap, unsigned long); break;
-            case LEN_LL: v = va_arg(ap, unsigned long long); break;
+            case LEN_HH:    v = (unsigned char)va_arg(ap, unsigned int); break;
+            case LEN_H:     v = (unsigned short)va_arg(ap, unsigned int); break;
+            case LEN_L:     v = va_arg(ap, unsigned long); break;
+            case LEN_LL:
+            case LEN_BIG_L: v = va_arg(ap, unsigned long long); break;
             case LEN_Z:
-            case LEN_T:  v = va_arg(ap, size_t); break;
-            case LEN_J:  v = va_arg(ap, uintmax_t); break;
-            default:     v = va_arg(ap, unsigned int); break;
+            case LEN_T:     v = va_arg(ap, size_t); break;
+            case LEN_J:     v = va_arg(ap, uintmax_t); break;
+            default:        v = va_arg(ap, unsigned int); break;
             }
             conv_int(&ob, &sp, 0, v);
             break;
@@ -465,7 +502,7 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
     size_t n;
 
     clock_gettime(CLOCK_REALTIME, &ts);
-    sod = (ts.tv_sec + g_gmtoff) % 86400;
+    sod = ts.tv_sec % 86400;
     if (sod < 0) {
         sod += 86400;
     }
