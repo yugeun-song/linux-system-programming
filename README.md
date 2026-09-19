@@ -119,10 +119,11 @@ column 0. All ten macros expand to `PRINT_EMIT(level, errnum, padding, ...)`.
   filter that denies `rt_sigprocmask` leaves nothing to do, as for any program. On a pipe or a unix
   stream socket a record of at most 1023 bytes is delivered whole or not at all, even with
   `O_NONBLOCK`; only a tty can split one when a signal interrupts a partial write.
-- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day is UTC
-  straight from `CLOCK_REALTIME`, so the logger never calls `tzset()` or `localtime_r()`. A call
-  takes under 2.5 KB of stack at `-O0 -pg`; on an alternate stack add the kernel's signal frame per
-  nesting level, `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on AVX-512.
+- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day is UTC straight
+  from `CLOCK_REALTIME`, so the logger never calls `tzset()` or `localtime_r()`. A call needs 2.5 KB
+  of stack at `-O0` and 2.9 KB at `-O2`, libc callees included, measured on a guard-paged `clone()`
+  stack; on an alternate stack add the kernel's signal frame per nesting level,
+  `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on AVX-512.
 - Handlers still save `errno` on entry and restore it on exit, so whatever call they gain later
   cannot overwrite the value the interrupted code is about to read.
 - `signal/mutex_in_signal_handler.c` is the deliberate counter-example, not a broken build. Its last
