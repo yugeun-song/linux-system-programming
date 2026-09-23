@@ -1,11 +1,12 @@
 #include <pthread.h>
+#include <stdint.h>
 #include <unistd.h>
 
 #include "utils/log.h"
 
 void *joinable_thread_routine(void *arg)
 {
-    unsigned long *thread_exit_code = (unsigned long *)13;
+    uintptr_t thread_exit_code = 13;
     char *arg_msg = (char *)arg;
 
     PRINT_INFO("received message %s", arg_msg);
@@ -64,7 +65,7 @@ int main(void)
         return 1;
     }
 
-    PRINT_INFO("joinable thread returned %lu", (unsigned long)joinable_thread_exit_code);
+    PRINT_INFO("joinable thread returned %lu", (unsigned long)(uintptr_t)joinable_thread_exit_code);
 
     pthread_attr_destroy(&detached_thread_attr);
     pthread_exit(NULL);
