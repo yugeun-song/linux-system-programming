@@ -73,13 +73,11 @@ static ssize_t write_all(int fd, const void *buf, size_t count)
     }
 
     if (raised != 0) {
-        sigset_t one;
         int was_pending = sigismember(&pending, raised);
         int ours = !was_pending;
 
-        sigemptyset(&one);
-        sigaddset(&one, raised);
-        if (sigtimedwait(&one, &si, &zero) == raised) {
+        sigdelset(&guard, (raised == SIGPIPE) ? SIGXFSZ : SIGPIPE);
+        if (sigtimedwait(&guard, &si, &zero) == raised) {
             if (!ours) {
                 sigemptyset(&pending);
                 sigpending(&pending);
@@ -189,7 +187,7 @@ static size_t fmt_udigits(char *out, unsigned long long v, unsigned base, int up
 static void conv_int(struct outbuf *ob, const struct spec *sp, int neg, unsigned long long mag)
 {
     char body[24];
-    char pfx[2];
+    char pfx[3];
     size_t npfx = 0;
     size_t nzeros = 0;
     size_t nbody;
@@ -197,7 +195,7 @@ static void conv_int(struct outbuf *ob, const struct spec *sp, int neg, unsigned
 
     if (sp->conv == 'o') {
         base = 8;
-    } else if (sp->conv == 'x' || sp->conv == 'X') {
+    } else if (sp->conv == 'x' || sp->conv == 'X' || sp->conv == 'p') {
         base = 16;
     }
 
@@ -211,23 +209,20 @@ static void conv_int(struct outbuf *ob, const struct spec *sp, int neg, unsigned
         nzeros = (size_t)sp->prec - nbody;
     }
 
-    if (sp->conv == 'd' || sp->conv == 'i') {
+    if (sp->conv == 'd' || sp->conv == 'i' || sp->conv == 'p') {
         if (neg) {
-            pfx[0] = '-';
-            npfx = 1;
+            pfx[npfx++] = '-';
         } else if (sp->plus) {
-            pfx[0] = '+';
-            npfx = 1;
+            pfx[npfx++] = '+';
         } else if (sp->space) {
-            pfx[0] = ' ';
-            npfx = 1;
+            pfx[npfx++] = ' ';
         }
-    } else if (sp->alt && sp->conv == 'o' && nzeros == 0 && (nbody == 0 || body[0] != '0')) {
+    }
+    if (sp->alt && sp->conv == 'o' && nzeros == 0 && (nbody == 0 || body[0] != '0')) {
         nzeros = 1;
     } else if (sp->alt && base == 16 && mag != 0) {
-        pfx[0] = '0';
-        pfx[1] = sp->conv;
-        npfx = 2;
+        pfx[npfx++] = '0';
+        pfx[npfx++] = (sp->conv == 'X') ? 'X' : 'x';
     }
 
     put_field(ob, sp, sp->zero && !sp->left && sp->prec < 0, pfx, npfx, nzeros, body, nbody);
@@ -252,9 +247,7 @@ static void conv_ptr(struct outbuf *ob, const struct spec *sp, const void *ptr)
         put_field(ob, sp, 0, "", 0, 0, "(nil)", 5);
         return;
     }
-    hex.conv = 'x';
     hex.alt = 1;
-    hex.prec = -1;
     conv_int(ob, &hex, 0, (unsigned long long)(uintptr_t)ptr);
 }
 
@@ -263,6 +256,33 @@ static const char *errdesc(int errnum)
     const char *desc = strerrordesc_np(errnum);
 
     return (desc != NULL) ? desc : "Unknown error";
+}
+
+static void conv_errno(struct outbuf *ob, const struct spec *sp, int errnum)
+{
+    char text[40];
+    const char *s = sp->alt ? strerrorname_np(errnum) : strerrordesc_np(errnum);
+    unsigned long long mag = (errnum < 0) ? (unsigned long long)(-(errnum + 1)) + 1 : (unsigned long long)errnum;
+
+    if (s == NULL && sp->alt) {
+        struct spec dec = *sp;
+
+        dec.conv = 'd';
+        conv_int(ob, &dec, errnum < 0, mag);
+        return;
+    }
+    if (s == NULL) {
+        size_t n = sizeof("Unknown error ") - 1;
+
+        memcpy(text, "Unknown error ", n);
+        if (errnum < 0) {
+            text[n++] = '-';
+        }
+        n += fmt_udigits(text + n, mag, 10, 0);
+        text[n] = '\0';
+        s = text;
+    }
+    conv_str(ob, sp, s);
 }
 
 static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt, va_list ap)
@@ -434,7 +454,7 @@ static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt,
             }
             break;
         case 'p': conv_ptr(&ob, &sp, va_arg(ap, const void *)); break;
-        case 'm': conv_str(&ob, &sp, errdesc(errno)); break;
+        case 'm': conv_errno(&ob, &sp, errno); break;
         case 'n':
             (void)va_arg(ap, void *);
             raw = 1;
@@ -490,7 +510,7 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
 {
     int saved_errno = errno;
     char buf[1024];
-    char err_msg[160];
+    const char *desc = "";
     struct timespec ts = {
         0,
     };
@@ -507,12 +527,18 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
         sod += 86400;
     }
 
+    elen = 0;
     if (errnum != 0) {
-        log_format(err_msg, sizeof(err_msg), ": %s (errno=%d)", errdesc(errnum), errnum);
-    } else {
-        err_msg[0] = '\0';
+        unsigned long long mag =
+            (errnum < 0) ? (unsigned long long)(-(errnum + 1)) + 1 : (unsigned long long)errnum;
+
+        desc = errdesc(errnum);
+        elen = strlen(desc) + sizeof(": ") + sizeof(" (errno=") + sizeof(")") - 3 + (errnum < 0);
+        do {
+            elen++;
+            mag /= 10;
+        } while (mag != 0);
     }
-    elen = strlen(err_msg);
     cap = sizeof(buf) - elen - 1;
 
     n = log_format(buf,
@@ -541,8 +567,12 @@ void log_emit(const char *level, const char *file, int line, const char *func, i
         n = cap - 1;
     }
 
-    memcpy(buf + n, err_msg, elen);
-    n += elen;
+    if (errnum != 0) {
+        n += log_format(buf + n, sizeof(buf) - n, ": %s (errno=%d)", desc, errnum);
+        if (n > sizeof(buf) - 2) {
+            n = sizeof(buf) - 2;
+        }
+    }
     buf[n] = '\n';
     ++n;
     write_all(STDERR_FILENO, buf, n);
