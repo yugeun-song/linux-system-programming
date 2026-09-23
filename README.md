@@ -82,9 +82,9 @@ whole. The `PRINT_` prefix stays clear of `<syslog.h>`, which owns the `LOG_*` n
 HH:MM:SS.mmm [LEVEL] [pid/tid] file:line func(): message: description (errno=N)
 ```
 
-in UTC from the raw POSIX clock, with `LEVEL` one of `INFO`, `WARN` and `ERR` padded to four
-columns, `tid` the kernel thread id from `gettid()`, and the errno tail present only when a number
-is passed.
+from the raw `CLOCK_REALTIME` value with no zone applied, with `LEVEL` one of `INFO`, `WARN` and
+`ERR` padded to four columns, `tid` the kernel thread id from `gettid()`, and the errno tail present
+only when a number is passed.
 
 `PRINT_INFO()` carries the narrative and `PRINT_ERR()` a failure without an error number.
 `PRINT_PERROR(errnum, ...)` and `PRINT_PWARN(errnum, ...)` take the number as an argument, covering
@@ -104,12 +104,12 @@ column 0. All ten macros expand to `PRINT_EMIT(level, errnum, padding, ...)`.
   multithreaded `fork()` and from any thread; only the short-write retry loop in `write_all()` can
   split a record between threads. `nm -u bin/utils/log.o` lists the call surface; a record costs six
   system calls.
-- `utils/log.c` formats with its own `printf` subset: the C99 integer, character, string and
-  pointer conversions with flags, width, precision and length modifiers (`L` and `q` read as `ll`,
-  as glibc does), plus `%m`, matching glibc's `snprintf()` byte for byte. Floating-point
-  conversions, `%lc`, `%ls`, `%n` and anything unknown consume their argument and print the
-  specifier verbatim, so later arguments stay aligned; log a duration as an integer count of ns
-  rather than a double. A NULL format prints `(null)`.
+- `utils/log.c` formats with its own `printf` subset: the C99 integer, character, string and pointer
+  conversions with flags, width, precision and length modifiers (`L` and `q` read as `ll`, as glibc
+  does), plus `%m` and `%#m`, matching glibc's `snprintf()` byte for byte; the `'` and `I` flags are
+  accepted and ignored. Floating-point conversions, `%lc`, `%ls`, `%n` and anything unknown consume
+  their argument and print the specifier verbatim, so later arguments stay aligned; log a duration
+  as an integer count of ns rather than a double. A NULL format prints `(null)`.
 - Nothing can block or crash the caller: a record is cut at 1023 bytes with its errno suffix and
   newline kept, width and precision are clamped at 65535, an unknown errno reads `Unknown error`, a
   closed or non-blocking stderr drops the record, and so do a broken pipe and a file at
@@ -118,12 +118,14 @@ column 0. All ten macros expand to `PRINT_EMIT(level, errnum, padding, ...)`.
   Under a seccomp filter that denies `rt_sigtimedwait` it leaves that signal blocked instead; only a
   filter that denies `rt_sigprocmask` leaves nothing to do, as for any program. On a pipe or a unix
   stream socket a record of at most 1023 bytes is delivered whole or not at all, even with
-  `O_NONBLOCK`; only a tty can split one when a signal interrupts a partial write.
-- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day is UTC straight
-  from `CLOCK_REALTIME`, so the logger never calls `tzset()` or `localtime_r()`. A call needs 2.5 KB
-  of stack at `-O0` and 2.9 KB at `-O2`, libc callees included, measured on a guard-paged `clone()`
-  stack; on an alternate stack add the kernel's signal frame per nesting level,
-  `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on AVX-512.
+  `O_NONBLOCK`; a tty can split one when a signal interrupts a partial write, and a non-blocking TCP
+  socket when its send buffer fills mid-record.
+- The error text comes from `strerrordesc_np()`, a table lookup, and the time of day is
+  `CLOCK_REALTIME` reduced modulo one day with no zone handling, so the logger never calls `tzset()`
+  or `localtime_r()`. A call needs 2.4 KB of stack at `-O0`, 2.7 KB at `-O2` and 5.6 KB under
+  ASan+UBSan, libc callees included, measured on a guard-paged `clone()` stack; on an alternate
+  stack add the kernel's signal frame per nesting level, `getauxval(AT_MINSIGSTKSZ)`, 3.6 KB on
+  AVX-512.
 - Handlers still save `errno` on entry and restore it on exit, so whatever call they gain later
   cannot overwrite the value the interrupted code is about to read.
 - `signal/mutex_in_signal_handler.c` is the deliberate counter-example, not a broken build. Its last
