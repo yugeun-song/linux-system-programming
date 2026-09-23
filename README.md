@@ -75,8 +75,10 @@ line while it fits in 100 columns and otherwise gives every argument a line of i
 
 Every line an example prints goes through `PRINT_*()` (`utils/log.h`) to descriptor 2, whatever it
 is at the time, one `write()` per call; the examples use no stdio. glibc's `fprintf(stderr, ...)`
-issues one `write()` per conversion, so its lines tear under contention where the logger's stay
-whole. The `PRINT_` prefix stays clear of `<syslog.h>`, which owns the `LOG_*` names. A record reads
+also formats the whole call into a temporary buffer before writing, so a short line reaches
+`write()` in one piece (glibc 2.44 splits only past 128 bytes). What it lacks is
+async-signal-safety: it takes the stream lock and can allocate, so it is unusable where the logger
+is. The `PRINT_` prefix stays clear of `<syslog.h>`, which owns the `LOG_*` names. A record reads
 
 ```text
 HH:MM:SS.mmm [LEVEL] [pid/tid] file:line func(): message: description (errno=N)
