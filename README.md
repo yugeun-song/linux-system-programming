@@ -43,10 +43,13 @@ make clean
 | `make unused` | unused diagnostics of every source (clang) and unused functions (cppcheck) |
 | `make format` | `clang-format -i` over every source and header |
 | `make format-check` | `clang-format --dry-run --Werror`; nonzero on drift |
-| `make help` | the goals, the variables and the programs |
+| `make list` | every program |
+| `make help` | the goals, the variables and the first ten programs |
 
 `PROFILE=debug` is the default; `PROFILE=release` makes `make`, a program goal, `make index` and
-`make unused` use the release build and its flags.
+`make unused` use the release build and its flags. Once `make index` has written
+`compile_commands.json`, every build rewrites it when its flags change, so an editor never reads
+stale flags.
 
 `build.mk` holds the rules and flag tables shared with the other repositories that build with Make;
 the `Makefile` keeps the program list and the flags of this tree. A flag the compiler or the target
