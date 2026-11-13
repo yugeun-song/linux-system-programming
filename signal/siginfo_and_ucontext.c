@@ -4,7 +4,6 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/ucontext.h>
-#include <unistd.h>
 
 #include "utils/log.h"
 
