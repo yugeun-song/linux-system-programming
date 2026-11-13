@@ -277,7 +277,7 @@ static void conv_ptr(struct outbuf *const mut_out, const struct spec *const spec
         return;
     }
     hex.is_alternate_form = 1;
-    conv_int(mut_out, &hex, 0, (unsigned long long)(uintptr_t)ptr_nullable);
+    conv_int(mut_out, &hex, 0, (unsigned long long)((uintptr_t)ptr_nullable));
 }
 
 static const char *describe_error(int errnum)

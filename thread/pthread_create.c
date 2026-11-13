@@ -69,7 +69,8 @@ int main(void)
         return EXIT_FAILURE;
     }
 
-    PRINT_INFO("joinable thread returned %lu", (unsigned long)(uintptr_t)joinable_thread_exit_code);
+    PRINT_INFO("joinable thread returned %lu",
+               (unsigned long)((uintptr_t)joinable_thread_exit_code));
 
     pthread_attr_destroy(&detached_thread_attr);
     pthread_exit(NULL);
