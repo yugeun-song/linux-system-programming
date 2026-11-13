@@ -18,9 +18,9 @@ directory. A new directory needs adding to `SRC_DIRS`. `bin/` and `build/` are u
 ## Build
 
 Requires GCC or Clang, GNU Make and glibc, plus clang-format for the format targets and Universal
-Ctags and cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()`
-and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions. That file
-also `#error`s outside x86_64, aarch64 and rv64.
+Ctags and cscope for the index targets. The minimum glibc version is 2.32, for `strerrordesc_np()`;
+`gettid()` and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions.
+That file also `#error`s outside x86_64, aarch64 and rv64.
 
 ```sh
 make
@@ -31,9 +31,9 @@ make clean
 | Target | Effect |
 |---|---|
 | `make`, `make all` | `debug` and `sanitize`, or `release` with `PROFILE=release`; one job per CPU unless `-j` is given |
-| `make debug` | `bin/<arch>-linux-<cc>-debug/`: `-O0`, full debug info, `-pg`, no injected hardening |
+| `make debug` | `bin/<arch>-linux-<cc>-debug/`: `-O0`, full debug info, `-pg`, no default hardening |
 | `make sanitize` | the debug build with `-fsanitize=address`, or the list in `SANITIZE=` |
-| `make release` | `-O2`, hardened, LTO |
+| `make release` | `-O2`, hardened, link-time optimization (LTO) |
 | `make <dir>/<name>` | one program, with the `PROFILE` flags |
 | `make CC=clang` | any of the above with Clang instead of GCC |
 | `make index` | `compile_commands.json` with the `PROFILE` flags, `tags` and `cscope.out`; also `make compdb`, `make tags`, `make cscope` |
@@ -42,7 +42,7 @@ make clean
 | `make distclean` | `clean`, `clean-index`, tool outputs (`gmon.out`, `perf.data`, `uftrace.data`, core files) and `.cache/` |
 | `make unused` | unused diagnostics of every source (clang) and unused functions (cppcheck) |
 | `make format` | `clang-format -i` over every source and header |
-| `make format-check` | `clang-format --dry-run --Werror`; nonzero on drift |
+| `make format-check` | `clang-format --dry-run --Werror`; nonzero when a file needs reformatting |
 | `make list` | every program |
 | `make help` | the goals, the variables and the first ten programs |
 
@@ -87,10 +87,10 @@ with a `=>` line that names what it produced and where. What the files do not st
 
 The code follows the
 [c-programming coding style](https://github.com/yugeun-song/c-programming/blob/main/docs/coding-style.md).
-`.clang-format` holds its formatting part and `make format-check` reports drift from it; naming,
-pointer parameters, explicit comparisons and the other rules are kept by hand. `.editorconfig` and
-`.gitattributes` keep UTF-8, LF, 4-space indent, tabs only in the `Makefile`, and a final newline
-only in C sources and headers.
+`.clang-format` holds its formatting part and `make format-check` reports the files that differ from
+it; naming, pointer parameters, explicit comparisons and the other rules are kept by hand.
+`.editorconfig` and `.gitattributes` keep UTF-8, LF, 4-space indent, tabs only in the `Makefile`,
+and a final newline only in C sources and headers.
 
 ## Output
 
