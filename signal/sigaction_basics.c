@@ -45,7 +45,7 @@ int main(void)
     }
 
     if (sigaction(SIGKILL, &sa, NULL) == -1) {
-        PRINT_PWARN(errno, "failed to register SIGKILL handler (expected; cannot be caught)");
+        PRINT_WARN_ERRNO(errno, "failed to register SIGKILL handler (expected; cannot be caught)");
     }
 
     if (sigaction(SIGTERM, &sa, NULL) == -1) {
@@ -54,7 +54,7 @@ int main(void)
     }
 
     if (sigaction(SIGSTOP, &sa, NULL) == -1) {
-        PRINT_PWARN(errno, "failed to register SIGSTOP handler (expected; cannot be caught)");
+        PRINT_WARN_ERRNO(errno, "failed to register SIGSTOP handler (expected; cannot be caught)");
     }
 
     PRINT_INFO("loop is running (press Ctrl+C or run 'kill %d' command)", getpid());

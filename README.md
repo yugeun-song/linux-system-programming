@@ -110,11 +110,11 @@ from the raw `CLOCK_REALTIME` value with no zone applied, with `LEVEL` one of `I
 only when a number is passed.
 
 `PRINT_INFO()` carries the narrative and `PRINT_ERR()` a failure without an error number.
-`PRINT_PERROR(errnum, ...)` and `PRINT_PWARN(errnum, ...)` take the number as an argument, covering
-both C conventions in one call shape: pass `errno` after a call that sets it, or the return value of
-a `pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
-`PRINT_PWARN()` marks a failure an example provokes on purpose, such as registering a handler for
-SIGKILL. The macros supply everything before the message; do not repeat it there.
+`PRINT_PERROR(errnum, ...)` and `PRINT_WARN_ERRNO(errnum, ...)` take the number as an argument,
+covering both C conventions in one call shape: pass `errno` after a call that sets it, or the return
+value of a `pthread_*` or `posix_spawn*` function, which return the number and leave `errno` alone.
+`PRINT_WARN_ERRNO()` marks a failure an example provokes on purpose, such as registering a handler
+for SIGKILL. The macros supply everything before the message; do not repeat it there.
 
 A message may span lines: after each `\n` the next line is padded to the width of that record's
 prefix, and a blank line gets none. The `PRINT_*_NO_PADDING()` forms leave continuation lines at
