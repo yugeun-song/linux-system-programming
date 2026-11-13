@@ -17,7 +17,7 @@ topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked
 
 ## Build
 
-Requires GCC, GNU Make and glibc, plus clang-format for the format targets and Universal Ctags and
+Requires GCC or Clang, GNU Make and glibc, plus clang-format for the format targets and Universal Ctags and
 cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()` and
 the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions.
 That file also `#error`s outside x86_64, aarch64 and rv64.
@@ -31,6 +31,7 @@ make clean
 | Target | Effect |
 |---|---|
 | `make` | build every `bin/<dir>/<name>`, plus `tags`, `cscope.out` and `compile_commands.json` |
+| `make CC=clang` | the same build with Clang instead of GCC |
 | `make symbols` | the symbol index on its own |
 | `make tags` | ctags only |
 | `make cscope` | cscope only |
