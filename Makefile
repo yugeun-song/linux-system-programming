@@ -1,5 +1,5 @@
 STD := gnu99
-WARNINGS_EXTRA := -Wconversion -Wsign-conversion
+WARNINGS_EXTRA := -Wconversion -Wsign-conversion -Wno-unused-parameter
 CPPFLAGS_EXTRA := -I.
 LDFLAGS_EXTRA := -Wl,-z,now
 CFLAGS_EXTRA := -pthread

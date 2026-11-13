@@ -79,9 +79,9 @@ with a `=>` line that names what it produced and where. What the files do not st
   run from, under that one name. Run them from separate directories or set `GMON_OUT_PREFIX` to keep
   more than one. A child leaving through `_exit()` writes no profile, so the fork examples produce
   one for the parent only.
-- The `-Wunused-parameter` warnings come from signal handlers and thread routines whose signatures
-  are fixed by the API. The build keeps every `-Wunused-*` warning; `.clangd` suppresses them so
-  the editor stays quiet.
+- Signal handlers and thread routines have signatures the API fixes, so the parameters they leave
+  unused carry no information: the build passes `-Wno-unused-parameter`, and clangd follows the
+  build through `compile_commands.json`. Every other `-Wunused-*` warning stays on.
 
 ## Coding style
 
