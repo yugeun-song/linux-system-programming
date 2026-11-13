@@ -1,5 +1,6 @@
 # Compiled binaries, objects and dependency files
 /bin/
+/build/
 *.o
 *.d
 !.ctags.d/
@@ -36,7 +37,7 @@ gmon.out
 qemu.log
 trace-events-all
 
-# Symbol databases; the default `make` builds them, `clean` removes them
+# Symbol databases; `make index` builds them, `make clean-index` removes them
 tags
 TAGS
 cscope.out

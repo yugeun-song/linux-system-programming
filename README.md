@@ -1,9 +1,9 @@
 # linux-system-programming
 
 Example programs for Linux system programming. Each `.c` in a topic directory builds to
-`bin/<dir>/<name>`; `utils/` is the exception, compiled as an object library and linked into every
-target. Sources are collected by wildcard, so a new example is just a `.c` dropped into an existing
-topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked.
+`bin/<arch>-linux-<cc>-<mode>/<dir>/<name>`; `utils/` is the exception, compiled into every target.
+Sources are collected by wildcard, so a new example is just a `.c` dropped into an existing topic
+directory. A new directory needs adding to `SRC_DIRS`. `bin/` and `build/` are untracked.
 
 ## Layout
 
@@ -17,52 +17,59 @@ topic directory. A new directory needs adding to `SRC_DIRS`. `bin/` is untracked
 
 ## Build
 
-Requires GCC or Clang, GNU Make and glibc, plus clang-format for the format targets and Universal Ctags and
-cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()` and
-the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions.
-That file also `#error`s outside x86_64, aarch64 and rv64.
+Requires GCC or Clang, GNU Make and glibc, plus clang-format for the format targets and Universal
+Ctags and cscope for the index targets. The glibc floor is 2.32, for `strerrordesc_np()`; `gettid()`
+and the `uc_mcontext` layout `signal/siginfo_and_ucontext.c` reads are GNU extensions. That file
+also `#error`s outside x86_64, aarch64 and rv64.
 
 ```sh
 make
-make format-check
+make index
 make clean
 ```
 
 | Target | Effect |
 |---|---|
-| `make` | build every `bin/<dir>/<name>`, plus `tags`, `cscope.out` and `compile_commands.json` |
-| `make CC=clang` | the same build with Clang instead of GCC |
-| `make symbols` | the symbol index on its own |
-| `make tags` | ctags only |
-| `make cscope` | cscope only |
-| `make compdb` | `compile_commands.json` only |
+| `make`, `make all` | `debug` and `sanitize`, one job per CPU unless `-j` is given |
+| `make debug` | `bin/<arch>-linux-<cc>-debug/`: `-O0`, full debug info, `-pg`, no injected hardening |
+| `make sanitize` | the debug build with `-fsanitize=address`, or the list in `SANITIZE=` |
+| `make release` | `-O2`, hardened, LTO |
+| `make <dir>/<name>` | one program, debug |
+| `make CC=clang` | any of the above with Clang instead of GCC |
+| `make index` | `compile_commands.json`, `tags` and `cscope.out`; also `make compdb`, `make tags`, `make cscope` |
+| `make clean-index` | remove the index files |
+| `make clean` | remove `bin/` and `build/` |
+| `make distclean` | `clean`, `clean-index`, tool outputs (`gmon.out`, `perf.data`, `uftrace.data`, core files) and `.cache/` |
 | `make format` | `clang-format -i` over every source and header |
 | `make format-check` | `clang-format --dry-run --Werror`; nonzero on drift |
-| `make clean` | remove `bin/`, the symbol index and `gmon.out` |
+| `make help` | this list |
 
-Flags live in the `Makefile` (`STD`, `WARNINGS`, `DEBUG`, `DEPFLAGS`, `CFLAGS`, `LDFLAGS`). What it
-does not state:
+`mk/c.mk` holds the rules and flag tables shared with the other repositories that build with Make;
+the `Makefile` keeps the program list and the flags of this tree. A flag the compiler or the target
+rejects is dropped after a probe, and the build names the dropped flags once. What the files do not
+state:
 
 - `-std=gnu99` is pinned so the build does not shift with the compiler's default.
 - `-Wl,-z,now` binds every PLT entry before `main()`. With lazy binding the first call of a libc
   function from a signal handler would run the dynamic linker's resolver inside the handler, which
   is not async-signal-safe; anything else that links `utils/log.c` needs the same flag.
-- `-O0 -ggdb3` with frame pointers kept: these binaries are for GDB, Valgrind and perf, not for
-  timing.
-- `-MMD -MP` puts `.d` files beside the objects and executables in `bin/`, so editing
-  `utils/log.h` rebuilds everything that includes it.
+- Debug and sanitize builds keep `-O0 -ggdb3` and frame pointers: these binaries are for GDB,
+  Valgrind, perf and uftrace, not for timing. They link without PIE and with `-rdynamic`, so the
+  addresses `objdump` prints are the ones the process runs at and every function name reaches
+  `backtrace()`.
+- `-MMD -MP` puts `.d` files beside the objects in `build/`, so editing `utils/log.h` rebuilds
+  everything that includes it.
 - `-I.` is what makes `#include "utils/log.h"` resolve from the project root. clangd reads it from
-  `compile_commands.json`, a file target of the default build rather than a command to remember;
-  left to a separate command it went ungenerated and clangd reported 40 errors over the tree. A
-  source added before the next `make` borrows the flags of its nearest neighbour in the database,
-  so it parses cleanly too.
+  `compile_commands.json`, which `make index` writes; without the file clangd reported 40 errors
+  over the tree. A source added before the next `make index` borrows the flags of its nearest
+  neighbour in the database, so it parses cleanly too.
 - `.ctags.d/default.ctags` holds the ctags settings, so an editor invoking ctags itself indexes the
   tree the way `make tags` does. `cscope -bkqu` skips `/usr/include`, so a query answers about this
   tree instead of libc; the `u` forces a full rebuild past cscope's whole-second mtime comparison.
-- `-pg`: every program writes its profile as `gmon.out` in the directory it was run from, under
-  that one name. Run them from separate directories or set `GMON_OUT_PREFIX` to keep more than one.
-  A child leaving through `_exit()` writes no profile, so the fork examples produce one for the
-  parent only.
+- `-pg`: every debug and sanitize program writes its profile as `gmon.out` in the directory it was
+  run from, under that one name. Run them from separate directories or set `GMON_OUT_PREFIX` to keep
+  more than one. A child leaving through `_exit()` writes no profile, so the fork examples produce
+  one for the parent only.
 - The `-Wunused-parameter` warnings come from signal handlers and thread routines whose signatures
   are fixed by the API. The build keeps every `-Wunused-*` warning; `.clangd` suppresses them so
   the editor stays quiet.
@@ -109,8 +116,8 @@ column 0. All ten macros expand to `PRINT_EMIT(level, errnum, padding, ...)`.
 - `log_emit()` is async-signal-safe: no stdio, no lock, no `malloc`, no static state, one `write()`
   per call, `errno` and the signal mask preserved. It works in a signal handler, in the child of a
   multithreaded `fork()` and from any thread; only the short-write retry loop in `write_all()` can
-  split a record between threads. `nm -u bin/utils/log.o` lists the call surface; a record costs six
-  system calls.
+  split a record between threads. `nm -u build/x86_64-linux-gcc-debug/utils/log.o` lists the call
+  surface; a record costs six system calls.
 - `utils/log.c` formats with its own `printf` subset: the C99 integer, character, string and pointer
   conversions with flags, width, precision and length modifiers (`L` and `q` read as `ll`, as glibc
   does), plus `%m` and `%#m`, matching glibc's `snprintf()` byte for byte; the `'` and `I` flags are
