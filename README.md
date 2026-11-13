@@ -30,26 +30,32 @@ make clean
 
 | Target | Effect |
 |---|---|
-| `make`, `make all` | `debug` and `sanitize`, one job per CPU unless `-j` is given |
+| `make`, `make all` | `debug` and `sanitize`, or `release` with `PROFILE=release`; one job per CPU unless `-j` is given |
 | `make debug` | `bin/<arch>-linux-<cc>-debug/`: `-O0`, full debug info, `-pg`, no injected hardening |
 | `make sanitize` | the debug build with `-fsanitize=address`, or the list in `SANITIZE=` |
 | `make release` | `-O2`, hardened, LTO |
-| `make <dir>/<name>` | one program, debug |
+| `make <dir>/<name>` | one program, with the `PROFILE` flags |
 | `make CC=clang` | any of the above with Clang instead of GCC |
-| `make index` | `compile_commands.json`, `tags` and `cscope.out`; also `make compdb`, `make tags`, `make cscope` |
+| `make index` | `compile_commands.json` with the `PROFILE` flags, `tags` and `cscope.out`; also `make compdb`, `make tags`, `make cscope` |
 | `make clean-index` | remove the index files |
 | `make clean` | remove `bin/` and `build/` |
 | `make distclean` | `clean`, `clean-index`, tool outputs (`gmon.out`, `perf.data`, `uftrace.data`, core files) and `.cache/` |
+| `make unused` | unused diagnostics of every source (clang) and unused functions (cppcheck) |
 | `make format` | `clang-format -i` over every source and header |
 | `make format-check` | `clang-format --dry-run --Werror`; nonzero on drift |
-| `make help` | this list |
+| `make help` | the goals, the variables and the programs |
 
-`mk/c.mk` holds the rules and flag tables shared with the other repositories that build with Make;
+`PROFILE=debug` is the default; `PROFILE=release` makes `make`, a program goal, `make index` and
+`make unused` use the release build and its flags.
+
+`build.mk` holds the rules and flag tables shared with the other repositories that build with Make;
 the `Makefile` keeps the program list and the flags of this tree. A flag the compiler or the target
-rejects is dropped after a probe, and the build names the dropped flags once. What the files do not
-state:
+rejects is dropped after a probe. The probe prints the flags of every mode once, and every goal ends
+with a `=>` line that names what it produced and where. What the files do not state:
 
 - `-std=gnu99` is pinned so the build does not shift with the compiler's default.
+- `-pthread` reaches the compiler as well as the linker, as GCC asks. It defines `_REENTRANT`, which
+  changes no object here, and clangd parses a header with the same flags as its sources.
 - `-Wl,-z,now` binds every PLT entry before `main()`. With lazy binding the first call of a libc
   function from a signal handler would run the dynamic linker's resolver inside the handler, which
   is not async-signal-safe; anything else that links `utils/log.c` needs the same flag.
