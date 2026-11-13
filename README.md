@@ -66,10 +66,14 @@ does not state:
   are fixed by the API. The build keeps every `-Wunused-*` warning; `.clangd` suppresses them so
   the editor stays quiet.
 
-`.clang-format` is LLVM base, 4-space, 100 col. `Cpp11BracedListStyle: false` is what makes braced
-initializers `{ content }` rather than `{content}`. `BinPackArguments: false` keeps a call on one
-line while it fits in 100 columns and otherwise gives every argument a line of its own.
-`make format-check` enforces all of it.
+## Coding style
+
+The code follows the
+[c-programming coding style](https://github.com/yugeun-song/c-programming/blob/main/docs/coding-style.md).
+`.clang-format` holds its formatting part and `make format-check` reports drift from it; naming,
+pointer parameters, explicit comparisons and the other rules are kept by hand. `.editorconfig` and
+`.gitattributes` keep UTF-8, LF, 4-space indent, tabs only in the `Makefile`, and a final newline
+only in C sources and headers.
 
 ## Output
 
@@ -131,10 +135,10 @@ column 0. All ten macros expand to `PRINT_EMIT(level, errnum, padding, ...)`.
 - Handlers still save `errno` on entry and restore it on exit, so whatever call they gain later
   cannot overwrite the value the interrupted code is about to read.
 - `signal/mutex_in_signal_handler.c` is the deliberate counter-example, not a broken build. Its last
-  stage relocks `g_mutex` from `handler_lock()` on the thread already holding it. POSIX leaves that
-  undefined for a default mutex and glibc deadlocks, so the run hangs after its last line. Its
-  header comment covers the near miss: `pthread_mutex_trylock()` and `pthread_mutex_timedlock()`
-  bound the wait but are no safer.
+  stage relocks `gs_mutex` from `handle_alarm_with_lock()` on the thread already holding it. POSIX
+  leaves that undefined for a default mutex and glibc deadlocks, so the run hangs after its last
+  line. Its header comment covers the near miss: `pthread_mutex_trylock()` and
+  `pthread_mutex_timedlock()` bound the wait but are no safer.
 - After `fork()` the child path uses only `PRINT_*()` and `_exit()`; `process/fork.c` and
   `process/fork_thread_locals.c` both show the shape. `_exit()` keeps the child from running the
   parent's `atexit()` handlers or flushing stdio it inherited, which matters as soon as a program

@@ -1,50 +1,59 @@
 #define _GNU_SOURCE
 
 #include <errno.h>
-#include <stdlib.h>
 #include <signal.h>
-#include <unistd.h>
+#include <stdlib.h>
 #include <sys/ucontext.h>
+#include <unistd.h>
 
 #include "utils/log.h"
 
 #if defined(__x86_64__)
-#define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.gregs[REG_RIP])
-#define UC_SP(uc) ((unsigned long long)(uc)->uc_mcontext.gregs[REG_RSP])
+# define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.gregs[REG_RIP])
+# define UC_SP(uc) ((unsigned long long)(uc)->uc_mcontext.gregs[REG_RSP])
 #elif defined(__aarch64__)
-#define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.pc)
-#define UC_SP(uc) ((unsigned long long)(uc)->uc_mcontext.sp)
+# define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.pc)
+# define UC_SP(uc) ((unsigned long long)(uc)->uc_mcontext.sp)
 #elif defined(__riscv) && (__riscv_xlen == 64)
-#define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.__gregs[REG_PC])
-#define UC_SP(uc) ((unsigned long long)(uc)->uc_mcontext.__gregs[REG_SP])
+# define UC_PC(uc) ((unsigned long long)(uc)->uc_mcontext.__gregs[REG_PC])
+# define UC_SP(uc) ((unsigned long long)(uc)->uc_mcontext.__gregs[REG_SP])
 #else
-#error "unsupported architecture (need x86_64, aarch64, or rv64)"
+# error "unsupported architecture (need x86_64, aarch64, or rv64)"
 #endif
 
-static const char *si_code_to_str(int si_code)
+static const char *get_si_code_name(int si_code)
 {
     switch (si_code) {
-    case SI_USER:    return "SI_USER";
-    case SI_KERNEL:  return "SI_KERNEL";
-    case SI_QUEUE:   return "SI_QUEUE";
-    case SI_TIMER:   return "SI_TIMER";
-    case SI_MESGQ:   return "SI_MESGQ";
-    case SI_ASYNCIO: return "SI_ASYNCIO";
-    case SI_SIGIO:   return "SI_SIGIO";
-    case SI_TKILL:   return "SI_TKILL";
-    default:         return "?";
+    case SI_USER:
+        return "SI_USER";
+    case SI_KERNEL:
+        return "SI_KERNEL";
+    case SI_QUEUE:
+        return "SI_QUEUE";
+    case SI_TIMER:
+        return "SI_TIMER";
+    case SI_MESGQ:
+        return "SI_MESGQ";
+    case SI_ASYNCIO:
+        return "SI_ASYNCIO";
+    case SI_SIGIO:
+        return "SI_SIGIO";
+    case SI_TKILL:
+        return "SI_TKILL";
+    default:
+        return "?";
     }
 }
 
-static void signal_handler(int signum, siginfo_t *info, void *ucontext)
+static void handle_signal(int signum, siginfo_t *const mut_info, void *const mut_ucontext)
 {
     int saved_errno = errno;
-    const ucontext_t *uc = ucontext;
+    const ucontext_t *uc = mut_ucontext;
 
     PRINT_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx",
                signum,
-               si_code_to_str(info->si_code),
-               info->si_pid,
+               get_si_code_name(mut_info->si_code),
+               mut_info->si_pid,
                UC_PC(uc),
                UC_SP(uc));
 
@@ -54,7 +63,7 @@ static void signal_handler(int signum, siginfo_t *info, void *ucontext)
 int main(void)
 {
     struct sigaction sa = { 0 };
-    sa.sa_sigaction = signal_handler;
+    sa.sa_sigaction = handle_signal;
     sa.sa_flags = SA_SIGINFO;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
@@ -75,5 +84,5 @@ int main(void)
     }
 
     PRINT_INFO("finished");
-    return EXIT_SUCCESS;
+    return 0;
 }

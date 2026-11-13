@@ -1,24 +1,28 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
-#include <stdlib.h>
 #include <signal.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include "utils/log.h"
 
 /* volatile forces a re-read each iteration; sig_atomic_t makes the handler's store indivisible. */
-static volatile sig_atomic_t g_is_running = 1;
+static volatile sig_atomic_t gs_is_running = 1;
 
-/* Returning from a handler for a kernel-generated SIGFPE/SIGILL/SIGSEGV/SIGBUS is undefined;
- * for one sent by kill(), raise() or sigqueue() it is defined. */
-static void signal_handler(int signum, siginfo_t *info, void *ucontext)
+/*
+ * Returning from a handler for a kernel-generated SIGFPE/SIGILL/SIGSEGV/SIGBUS is undefined;
+ * for one sent by kill(), raise() or sigqueue() it is defined.
+ */
+static void handle_signal(int signum, siginfo_t *const mut_info, void *const mut_ucontext)
 {
     int saved_errno = errno;
 
-    if (info->si_pid == getpid()) {
+    if (mut_info->si_pid == getpid()) {
         PRINT_INFO("self-raised, ignoring");
     } else {
         PRINT_INFO("external signal, exiting");
-        g_is_running = 0;
+        gs_is_running = 0;
     }
 
     errno = saved_errno;
@@ -27,9 +31,8 @@ static void signal_handler(int signum, siginfo_t *info, void *ucontext)
 int main(void)
 {
     struct sigaction sa = { 0 };
-    sa.sa_sigaction = signal_handler;
+    sa.sa_sigaction = handle_signal;
     sa.sa_flags = SA_SIGINFO;
-    int loop_count = 0;
 
     if (sigemptyset(&sa.sa_mask) == -1) {
         PRINT_PERROR(errno, "failed to initialize signal set with sigemptyset");
@@ -56,7 +59,9 @@ int main(void)
 
     PRINT_INFO("loop is running (press Ctrl+C or run 'kill %d' command)", getpid());
 
-    while (g_is_running) {
+    size_t loop_count = 0;
+
+    while (gs_is_running != 0) {
         PRINT_INFO("looping...");
         sleep(1);
 
@@ -72,5 +77,5 @@ int main(void)
     }
 
     PRINT_INFO("finished");
-    return EXIT_SUCCESS;
+    return 0;
 }

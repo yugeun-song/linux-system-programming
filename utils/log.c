@@ -1,5 +1,7 @@
 #define _GNU_SOURCE
 
+#include "utils/log.h"
+
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -11,453 +13,534 @@
 #include <unistd.h>
 #include <wchar.h>
 
-#include "utils/log.h"
-
 #define FIELD_MAX 65535
 
-enum len_mod { LEN_NONE, LEN_HH, LEN_H, LEN_L, LEN_LL, LEN_Z, LEN_J, LEN_T, LEN_BIG_L };
+enum len_mod {
+    LEN_NONE,
+    LEN_HH,
+    LEN_H,
+    LEN_L,
+    LEN_LL,
+    LEN_Z,
+    LEN_J,
+    LEN_T,
+    LEN_BIG_L,
+};
 
 struct outbuf {
     char *buf;
     size_t cap;
     size_t len;
     size_t indent;
-    int at_line_start;
+    int is_at_line_start;
 };
 
 struct spec {
-    int left;
-    int plus;
-    int space;
-    int alt;
-    int zero;
+    int is_left_justified;
+    int shows_sign;
+    int shows_space;
+    int is_alternate_form;
+    int pads_with_zero;
     int width;
     int prec;
     enum len_mod len;
     char conv;
 };
 
-static ssize_t write_all(int fd, const void *buf, size_t count)
+static ssize_t write_all(int fd, const void *const buf, size_t count)
 {
-    const char *ptr = buf;
-    size_t left = count;
-    struct timespec zero = { 0, 0 };
-    sigset_t guard;
+    const char *cursor = buf;
+    size_t remaining = count;
+    sigset_t guard_set;
     sigset_t old_set;
-    sigset_t pending;
-    siginfo_t si;
-    int raised = 0;
+    sigset_t pending_set;
+    int raised_signal = 0;
 
-    sigemptyset(&guard);
-    sigaddset(&guard, SIGPIPE);
-    sigaddset(&guard, SIGXFSZ);
-    sigemptyset(&pending);
-    sigpending(&pending);
-    pthread_sigmask(SIG_BLOCK, &guard, &old_set);
+    sigemptyset(&guard_set);
+    sigaddset(&guard_set, SIGPIPE);
+    sigaddset(&guard_set, SIGXFSZ);
+    sigemptyset(&pending_set);
+    sigpending(&pending_set);
+    pthread_sigmask(SIG_BLOCK, &guard_set, &old_set);
 
-    while (left > 0) {
-        ssize_t n = write(fd, ptr, left);
-        if (n <= 0) {
-            if (n < 0 && errno == EINTR) {
+    while (remaining > 0) {
+        ssize_t written = write(fd, cursor, remaining);
+        if (written <= 0) {
+            if (written < 0 && errno == EINTR) {
                 continue;
             }
-            if (n < 0 && errno == EPIPE) {
-                raised = SIGPIPE;
-            } else if (n < 0 && errno == EFBIG) {
-                raised = SIGXFSZ;
+            if (written < 0 && errno == EPIPE) {
+                raised_signal = SIGPIPE;
+            } else if (written < 0 && errno == EFBIG) {
+                raised_signal = SIGXFSZ;
             }
             break;
         }
-        left -= (size_t)n;
-        ptr += n;
+        remaining -= (size_t)written;
+        cursor += written;
     }
 
-    if (raised != 0) {
-        int was_pending = sigismember(&pending, raised);
-        int ours = !was_pending;
+    if (raised_signal != 0) {
+        struct timespec zero_timeout = { 0 };
+        siginfo_t info;
+        int was_pending = sigismember(&pending_set, raised_signal);
+        int is_own_signal = (was_pending == 0);
 
-        sigdelset(&guard, (raised == SIGPIPE) ? SIGXFSZ : SIGPIPE);
-        if (sigtimedwait(&guard, &si, &zero) == raised) {
-            if (!ours) {
-                sigemptyset(&pending);
-                sigpending(&pending);
-                ours = si.si_code == SI_USER && si.si_pid == getpid() && sigismember(&pending, raised);
+        sigdelset(&guard_set, (raised_signal == SIGPIPE) ? SIGXFSZ : SIGPIPE);
+        if (sigtimedwait(&guard_set, &info, &zero_timeout) == raised_signal) {
+            if (is_own_signal == 0) {
+                sigemptyset(&pending_set);
+                sigpending(&pending_set);
+                is_own_signal = info.si_code == SI_USER && info.si_pid == getpid() &&
+                                sigismember(&pending_set, raised_signal) != 0;
             }
-            if (!ours) {
-                raise(raised);
+            if (is_own_signal == 0) {
+                raise(raised_signal);
             }
-        } else if (ours) {
-            sigemptyset(&pending);
-            sigpending(&pending);
-            if (sigismember(&pending, raised)) {
-                sigaddset(&old_set, raised);
+        } else if (is_own_signal != 0) {
+            sigemptyset(&pending_set);
+            sigpending(&pending_set);
+            if (sigismember(&pending_set, raised_signal) != 0) {
+                sigaddset(&old_set, raised_signal);
             }
         }
     }
     pthread_sigmask(SIG_SETMASK, &old_set, NULL);
 
-    return (left == 0) ? (ssize_t)count : -1;
+    return (remaining == 0) ? (ssize_t)count : -1;
 }
 
-static void put_raw(struct outbuf *ob, char c)
+static void put_raw(struct outbuf *const mut_out, char c)
 {
-    if (ob->len < ob->cap) {
-        ob->buf[ob->len] = c;
+    if (mut_out->len < mut_out->cap) {
+        mut_out->buf[mut_out->len] = c;
     }
-    ++ob->len;
+    ++mut_out->len;
 }
 
-static void put_char(struct outbuf *ob, char c)
+static void put_char(struct outbuf *const mut_out, char c)
 {
-    size_t i;
-
     if (c == '\n') {
-        ob->at_line_start = 1;
-    } else if (ob->at_line_start) {
-        ob->at_line_start = 0;
-        for (i = 0; i < ob->indent; ++i) {
-            if (ob->len >= ob->cap) {
-                ob->len += ob->indent - i;
+        mut_out->is_at_line_start = 1;
+    } else if (mut_out->is_at_line_start != 0) {
+        mut_out->is_at_line_start = 0;
+        for (size_t i = 0; i < mut_out->indent; ++i) {
+            if (mut_out->len >= mut_out->cap) {
+                mut_out->len += mut_out->indent - i;
                 break;
             }
-            put_raw(ob, ' ');
+            put_raw(mut_out, ' ');
         }
     }
-    put_raw(ob, c);
+    put_raw(mut_out, c);
 }
 
-static void put_mem(struct outbuf *ob, const char *s, size_t n)
+static void put_mem(struct outbuf *const mut_out, const char *const text, size_t n)
 {
-    size_t i;
-
-    for (i = 0; i < n; ++i) {
-        put_char(ob, s[i]);
+    for (size_t i = 0; i < n; ++i) {
+        put_char(mut_out, text[i]);
     }
 }
 
-static void put_fill(struct outbuf *ob, char c, size_t n)
+static void put_fill(struct outbuf *const mut_out, char c, size_t n)
 {
     while (n > 0) {
-        put_char(ob, c);
+        put_char(mut_out, c);
         --n;
     }
 }
 
-static void put_field(struct outbuf *ob, const struct spec *sp, int zpad, const char *pfx,
-                      size_t npfx, size_t nzeros, const char *body, size_t nbody)
+static void put_field(struct outbuf *const mut_out, const struct spec *const spec,
+                      int pads_with_zero, const char *const prefix, size_t prefix_len,
+                      size_t zero_count, const char *const body, size_t body_len)
 {
-    size_t total = npfx + nzeros + nbody;
-    size_t pad = ((size_t)sp->width > total) ? (size_t)sp->width - total : 0;
+    size_t total = prefix_len + zero_count + body_len;
+    size_t pad = ((size_t)spec->width > total) ? (size_t)spec->width - total : 0;
 
-    if (sp->left) {
-        put_mem(ob, pfx, npfx);
-        put_fill(ob, '0', nzeros);
-        put_mem(ob, body, nbody);
-        put_fill(ob, ' ', pad);
-    } else if (zpad) {
-        put_mem(ob, pfx, npfx);
-        put_fill(ob, '0', nzeros + pad);
-        put_mem(ob, body, nbody);
+    if (spec->is_left_justified != 0) {
+        put_mem(mut_out, prefix, prefix_len);
+        put_fill(mut_out, '0', zero_count);
+        put_mem(mut_out, body, body_len);
+        put_fill(mut_out, ' ', pad);
+    } else if (pads_with_zero != 0) {
+        put_mem(mut_out, prefix, prefix_len);
+        put_fill(mut_out, '0', zero_count + pad);
+        put_mem(mut_out, body, body_len);
     } else {
-        put_fill(ob, ' ', pad);
-        put_mem(ob, pfx, npfx);
-        put_fill(ob, '0', nzeros);
-        put_mem(ob, body, nbody);
+        put_fill(mut_out, ' ', pad);
+        put_mem(mut_out, prefix, prefix_len);
+        put_fill(mut_out, '0', zero_count);
+        put_mem(mut_out, body, body_len);
     }
 }
 
-static size_t fmt_udigits(char *out, unsigned long long v, unsigned base, int upper)
+static size_t fmt_udigits(char *const mut_buf, unsigned long long value, unsigned base,
+                          int is_upper)
 {
-    const char *digits = upper ? "0123456789ABCDEF" : "0123456789abcdef";
+    const char *digits = (is_upper != 0) ? "0123456789ABCDEF" : "0123456789abcdef";
     char tmp[24];
     size_t n = 0;
-    size_t i;
 
-    while (v != 0) {
-        tmp[n] = digits[v % base];
+    while (value != 0) {
+        tmp[n] = digits[value % base];
         ++n;
-        v /= base;
+        value /= base;
     }
-    for (i = 0; i < n; ++i) {
-        out[i] = tmp[n - 1 - i];
+    for (size_t i = 0; i < n; ++i) {
+        mut_buf[i] = tmp[n - 1 - i];
     }
     return n;
 }
 
-static void conv_int(struct outbuf *ob, const struct spec *sp, int neg, unsigned long long mag)
+static unsigned long long compute_magnitude(long long value)
+{
+    if (value < 0) {
+        return (unsigned long long)(-(value + 1)) + 1;
+    }
+    return (unsigned long long)value;
+}
+
+static void conv_int(struct outbuf *const mut_out, const struct spec *const spec, int is_negative,
+                     unsigned long long magnitude)
 {
     char body[24];
-    char pfx[3];
-    size_t npfx = 0;
-    size_t nzeros = 0;
-    size_t nbody;
+    char prefix[3];
+    size_t prefix_len = 0;
+    size_t zero_count = 0;
     unsigned base = 10;
 
-    if (sp->conv == 'o') {
+    if (spec->conv == 'o') {
         base = 8;
-    } else if (sp->conv == 'x' || sp->conv == 'X' || sp->conv == 'p') {
+    } else if (spec->conv == 'x' || spec->conv == 'X' || spec->conv == 'p') {
         base = 16;
     }
 
-    nbody = fmt_udigits(body, mag, base, sp->conv == 'X');
-    if (sp->prec < 0) {
-        if (nbody == 0) {
+    size_t body_len = fmt_udigits(body, magnitude, base, spec->conv == 'X');
+    if (spec->prec < 0) {
+        if (body_len == 0) {
             body[0] = '0';
-            nbody = 1;
+            body_len = 1;
         }
-    } else if ((size_t)sp->prec > nbody) {
-        nzeros = (size_t)sp->prec - nbody;
+    } else if ((size_t)spec->prec > body_len) {
+        zero_count = (size_t)spec->prec - body_len;
     }
 
-    if (sp->conv == 'd' || sp->conv == 'i' || sp->conv == 'p') {
-        if (neg) {
-            pfx[npfx++] = '-';
-        } else if (sp->plus) {
-            pfx[npfx++] = '+';
-        } else if (sp->space) {
-            pfx[npfx++] = ' ';
+    if (spec->conv == 'd' || spec->conv == 'i' || spec->conv == 'p') {
+        if (is_negative != 0) {
+            prefix[prefix_len] = '-';
+            ++prefix_len;
+        } else if (spec->shows_sign != 0) {
+            prefix[prefix_len] = '+';
+            ++prefix_len;
+        } else if (spec->shows_space != 0) {
+            prefix[prefix_len] = ' ';
+            ++prefix_len;
         }
     }
-    if (sp->alt && sp->conv == 'o' && nzeros == 0 && (nbody == 0 || body[0] != '0')) {
-        nzeros = 1;
-    } else if (sp->alt && base == 16 && mag != 0) {
-        pfx[npfx++] = '0';
-        pfx[npfx++] = (sp->conv == 'X') ? 'X' : 'x';
+    if (spec->is_alternate_form != 0 && spec->conv == 'o' && zero_count == 0 &&
+        (body_len == 0 || body[0] != '0')) {
+        zero_count = 1;
+    } else if (spec->is_alternate_form != 0 && base == 16 && magnitude != 0) {
+        prefix[prefix_len] = '0';
+        ++prefix_len;
+        prefix[prefix_len] = (spec->conv == 'X') ? 'X' : 'x';
+        ++prefix_len;
     }
 
-    put_field(ob, sp, sp->zero && !sp->left && sp->prec < 0, pfx, npfx, nzeros, body, nbody);
+    int pads_with_zero = spec->pads_with_zero != 0 && spec->is_left_justified == 0 &&
+                         spec->prec < 0;
+
+    put_field(mut_out, spec, pads_with_zero, prefix, prefix_len, zero_count, body, body_len);
 }
 
-static void conv_str(struct outbuf *ob, const struct spec *sp, const char *s)
+static void conv_str(struct outbuf *const mut_out, const struct spec *const spec,
+                     const char *const text_nullable)
 {
-    size_t n;
+    const char *text = text_nullable;
 
-    if (s == NULL) {
-        s = (sp->prec < 0 || sp->prec >= 6) ? "(null)" : "";
+    if (text == NULL) {
+        text = (spec->prec < 0 || spec->prec >= 6) ? "(null)" : "";
     }
-    n = (sp->prec < 0) ? strlen(s) : strnlen(s, (size_t)sp->prec);
-    put_field(ob, sp, 0, "", 0, 0, s, n);
+
+    size_t len = (spec->prec < 0) ? strlen(text) : strnlen(text, (size_t)spec->prec);
+
+    put_field(mut_out, spec, 0, "", 0, 0, text, len);
 }
 
-static void conv_ptr(struct outbuf *ob, const struct spec *sp, const void *ptr)
+static void conv_ptr(struct outbuf *const mut_out, const struct spec *const spec,
+                     const void *const ptr_nullable)
 {
-    struct spec hex = *sp;
+    struct spec hex = *spec;
 
-    if (ptr == NULL) {
-        put_field(ob, sp, 0, "", 0, 0, "(nil)", 5);
+    if (ptr_nullable == NULL) {
+        put_field(mut_out, spec, 0, "", 0, 0, "(nil)", 5);
         return;
     }
-    hex.alt = 1;
-    conv_int(ob, &hex, 0, (unsigned long long)(uintptr_t)ptr);
+    hex.is_alternate_form = 1;
+    conv_int(mut_out, &hex, 0, (unsigned long long)(uintptr_t)ptr_nullable);
 }
 
-static const char *errdesc(int errnum)
+static const char *describe_error(int errnum)
 {
-    const char *desc = strerrordesc_np(errnum);
+    const char *description = strerrordesc_np(errnum);
 
-    return (desc != NULL) ? desc : "Unknown error";
+    return (description != NULL) ? description : "Unknown error";
 }
 
-static void conv_errno(struct outbuf *ob, const struct spec *sp, int errnum)
+static void conv_errno(struct outbuf *const mut_out, const struct spec *const spec, int errnum)
 {
     char text[40];
-    const char *s = sp->alt ? strerrorname_np(errnum) : strerrordesc_np(errnum);
-    unsigned long long mag = (errnum < 0) ? (unsigned long long)(-(errnum + 1)) + 1 : (unsigned long long)errnum;
+    const char *message = NULL;
+    unsigned long long magnitude = compute_magnitude(errnum);
 
-    if (s == NULL && sp->alt) {
-        struct spec dec = *sp;
+    if (spec->is_alternate_form != 0) {
+        message = strerrorname_np(errnum);
+    } else {
+        message = strerrordesc_np(errnum);
+    }
 
-        dec.conv = 'd';
-        conv_int(ob, &dec, errnum < 0, mag);
+    if (message == NULL && spec->is_alternate_form != 0) {
+        struct spec decimal = *spec;
+
+        decimal.conv = 'd';
+        conv_int(mut_out, &decimal, errnum < 0, magnitude);
         return;
     }
-    if (s == NULL) {
-        size_t n = sizeof("Unknown error ") - 1;
+    if (message == NULL) {
+        size_t len = sizeof("Unknown error ") - 1;
 
-        memcpy(text, "Unknown error ", n);
+        memcpy(text, "Unknown error ", len);
         if (errnum < 0) {
-            text[n++] = '-';
+            text[len] = '-';
+            ++len;
         }
-        n += fmt_udigits(text + n, mag, 10, 0);
-        text[n] = '\0';
-        s = text;
+        len += fmt_udigits(text + len, magnitude, 10, 0);
+        text[len] = '\0';
+        message = text;
     }
-    conv_str(ob, sp, s);
+    conv_str(mut_out, spec, message);
 }
 
-static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt, va_list ap)
+static size_t log_vformat(char *const mut_buf, size_t cap, size_t indent,
+                          const char *const fmt_nullable, va_list *const mut_ap)
 {
-    struct outbuf ob = { buf, cap, 0, indent, 0 };
-    const char *p = (fmt != NULL) ? fmt : "(null)";
+    struct outbuf out = {
+        .buf = mut_buf,
+        .cap = cap,
+        .len = 0,
+        .indent = indent,
+        .is_at_line_start = 0
+    };
+    const char *cursor = (fmt_nullable != NULL) ? fmt_nullable : "(null)";
 
-    while (*p != '\0') {
-        const char *start = p;
-        struct spec sp = { 0 };
-        int raw = 0;
+    while (*cursor != '\0') {
+        const char *start = cursor;
+        struct spec spec = { 0 };
+        int is_verbatim = 0;
 
-        if (*p != '%') {
-            put_char(&ob, *p);
-            ++p;
+        if (*cursor != '%') {
+            put_char(&out, *cursor);
+            ++cursor;
             continue;
         }
-        ++p;
+        ++cursor;
 
         for (;;) {
-            if (*p == '-') {
-                sp.left = 1;
-            } else if (*p == '+') {
-                sp.plus = 1;
-            } else if (*p == ' ') {
-                sp.space = 1;
-            } else if (*p == '#') {
-                sp.alt = 1;
-            } else if (*p == '0') {
-                sp.zero = 1;
-            } else if (*p != '\'' && *p != 'I') {
+            if (*cursor == '-') {
+                spec.is_left_justified = 1;
+            } else if (*cursor == '+') {
+                spec.shows_sign = 1;
+            } else if (*cursor == ' ') {
+                spec.shows_space = 1;
+            } else if (*cursor == '#') {
+                spec.is_alternate_form = 1;
+            } else if (*cursor == '0') {
+                spec.pads_with_zero = 1;
+            } else if (*cursor != '\'' && *cursor != 'I') {
                 break;
             }
-            ++p;
+            ++cursor;
         }
 
-        if (*p == '*') {
-            int w = va_arg(ap, int);
+        if (*cursor == '*') {
+            int width = va_arg(*mut_ap, int);
 
-            if (w < 0) {
-                sp.left = 1;
-                w = (w == INT_MIN) ? INT_MAX : -w;
+            if (width < 0) {
+                spec.is_left_justified = 1;
+                width = (width == INT_MIN) ? INT_MAX : -width;
             }
-            sp.width = (w > FIELD_MAX) ? FIELD_MAX : w;
-            ++p;
+            spec.width = (width > FIELD_MAX) ? FIELD_MAX : width;
+            ++cursor;
         } else {
-            while (*p >= '0' && *p <= '9') {
-                sp.width = sp.width * 10 + (*p - '0');
-                if (sp.width > FIELD_MAX) {
-                    sp.width = FIELD_MAX;
+            while (*cursor >= '0' && *cursor <= '9') {
+                spec.width = spec.width * 10 + (*cursor - '0');
+                if (spec.width > FIELD_MAX) {
+                    spec.width = FIELD_MAX;
                 }
-                ++p;
+                ++cursor;
             }
         }
 
-        sp.prec = -1;
-        if (*p == '.') {
-            ++p;
-            sp.prec = 0;
-            if (*p == '*') {
-                int pr = va_arg(ap, int);
+        spec.prec = -1;
+        if (*cursor == '.') {
+            ++cursor;
+            spec.prec = 0;
+            if (*cursor == '*') {
+                int precision = va_arg(*mut_ap, int);
 
-                sp.prec = (pr < 0) ? -1 : ((pr > FIELD_MAX) ? FIELD_MAX : pr);
-                ++p;
+                if (precision < 0) {
+                    spec.prec = -1;
+                } else if (precision > FIELD_MAX) {
+                    spec.prec = FIELD_MAX;
+                } else {
+                    spec.prec = precision;
+                }
+                ++cursor;
             } else {
-                while (*p >= '0' && *p <= '9') {
-                    sp.prec = sp.prec * 10 + (*p - '0');
-                    if (sp.prec > FIELD_MAX) {
-                        sp.prec = FIELD_MAX;
+                while (*cursor >= '0' && *cursor <= '9') {
+                    spec.prec = spec.prec * 10 + (*cursor - '0');
+                    if (spec.prec > FIELD_MAX) {
+                        spec.prec = FIELD_MAX;
                     }
-                    ++p;
+                    ++cursor;
                 }
             }
         }
 
-        if (*p == 'h') {
-            ++p;
-            sp.len = LEN_H;
-            if (*p == 'h') {
-                ++p;
-                sp.len = LEN_HH;
+        if (*cursor == 'h') {
+            ++cursor;
+            spec.len = LEN_H;
+            if (*cursor == 'h') {
+                ++cursor;
+                spec.len = LEN_HH;
             }
-        } else if (*p == 'l') {
-            ++p;
-            sp.len = LEN_L;
-            if (*p == 'l') {
-                ++p;
-                sp.len = LEN_LL;
+        } else if (*cursor == 'l') {
+            ++cursor;
+            spec.len = LEN_L;
+            if (*cursor == 'l') {
+                ++cursor;
+                spec.len = LEN_LL;
             }
-        } else if (*p == 'z') {
-            ++p;
-            sp.len = LEN_Z;
-        } else if (*p == 'j') {
-            ++p;
-            sp.len = LEN_J;
-        } else if (*p == 't') {
-            ++p;
-            sp.len = LEN_T;
-        } else if (*p == 'L') {
-            ++p;
-            sp.len = LEN_BIG_L;
-        } else if (*p == 'q') {
-            ++p;
-            sp.len = LEN_LL;
+        } else if (*cursor == 'z') {
+            ++cursor;
+            spec.len = LEN_Z;
+        } else if (*cursor == 'j') {
+            ++cursor;
+            spec.len = LEN_J;
+        } else if (*cursor == 't') {
+            ++cursor;
+            spec.len = LEN_T;
+        } else if (*cursor == 'L') {
+            ++cursor;
+            spec.len = LEN_BIG_L;
+        } else if (*cursor == 'q') {
+            ++cursor;
+            spec.len = LEN_LL;
         }
 
-        sp.conv = *p;
-        if (sp.conv == '\0') {
-            put_mem(&ob, start, (size_t)(p - start));
+        spec.conv = *cursor;
+        if (spec.conv == '\0') {
+            put_mem(&out, start, (size_t)(cursor - start));
             break;
         }
-        ++p;
+        ++cursor;
 
-        switch (sp.conv) {
+        switch (spec.conv) {
         case 'd':
         case 'i': {
-            long long v;
+            long long value = 0;
 
-            switch (sp.len) {
-            case LEN_HH:    v = (signed char)va_arg(ap, int); break;
-            case LEN_H:     v = (short)va_arg(ap, int); break;
-            case LEN_L:     v = va_arg(ap, long); break;
+            switch (spec.len) {
+            case LEN_HH:
+                value = (signed char)va_arg(*mut_ap, int);
+                break;
+            case LEN_H:
+                value = (short)va_arg(*mut_ap, int);
+                break;
+            case LEN_L:
+                value = va_arg(*mut_ap, long);
+                break;
             case LEN_LL:
-            case LEN_BIG_L: v = va_arg(ap, long long); break;
-            case LEN_Z:     v = va_arg(ap, ssize_t); break;
-            case LEN_J:     v = va_arg(ap, intmax_t); break;
-            case LEN_T:     v = va_arg(ap, ptrdiff_t); break;
-            default:        v = va_arg(ap, int); break;
+            case LEN_BIG_L:
+                value = va_arg(*mut_ap, long long);
+                break;
+            case LEN_Z:
+                value = va_arg(*mut_ap, ssize_t);
+                break;
+            case LEN_J:
+                value = va_arg(*mut_ap, intmax_t);
+                break;
+            case LEN_T:
+                value = va_arg(*mut_ap, ptrdiff_t);
+                break;
+            case LEN_NONE:
+                value = va_arg(*mut_ap, int);
+                break;
             }
-            conv_int(&ob, &sp, v < 0, (v < 0) ? (unsigned long long)(-(v + 1)) + 1 : (unsigned long long)v);
+            conv_int(&out, &spec, value < 0, compute_magnitude(value));
             break;
         }
         case 'u':
         case 'o':
         case 'x':
         case 'X': {
-            unsigned long long v;
+            unsigned long long value = 0;
 
-            switch (sp.len) {
-            case LEN_HH:    v = (unsigned char)va_arg(ap, unsigned int); break;
-            case LEN_H:     v = (unsigned short)va_arg(ap, unsigned int); break;
-            case LEN_L:     v = va_arg(ap, unsigned long); break;
+            switch (spec.len) {
+            case LEN_HH:
+                value = (unsigned char)va_arg(*mut_ap, unsigned int);
+                break;
+            case LEN_H:
+                value = (unsigned short)va_arg(*mut_ap, unsigned int);
+                break;
+            case LEN_L:
+                value = va_arg(*mut_ap, unsigned long);
+                break;
             case LEN_LL:
-            case LEN_BIG_L: v = va_arg(ap, unsigned long long); break;
+            case LEN_BIG_L:
+                value = va_arg(*mut_ap, unsigned long long);
+                break;
             case LEN_Z:
-            case LEN_T:     v = va_arg(ap, size_t); break;
-            case LEN_J:     v = va_arg(ap, uintmax_t); break;
-            default:        v = va_arg(ap, unsigned int); break;
+            case LEN_T:
+                value = va_arg(*mut_ap, size_t);
+                break;
+            case LEN_J:
+                value = va_arg(*mut_ap, uintmax_t);
+                break;
+            case LEN_NONE:
+                value = va_arg(*mut_ap, unsigned int);
+                break;
             }
-            conv_int(&ob, &sp, 0, v);
+            conv_int(&out, &spec, 0, value);
             break;
         }
         case 'c':
-            if (sp.len == LEN_L) {
-                (void)va_arg(ap, wint_t);
-                raw = 1;
+            if (spec.len == LEN_L) {
+                va_arg(*mut_ap, wint_t);
+                is_verbatim = 1;
             } else {
-                char ch = (char)va_arg(ap, int);
+                char ch = (char)va_arg(*mut_ap, int);
 
-                put_field(&ob, &sp, 0, "", 0, 0, &ch, 1);
+                put_field(&out, &spec, 0, "", 0, 0, &ch, 1);
             }
             break;
         case 's':
-            if (sp.len == LEN_L) {
-                (void)va_arg(ap, const wchar_t *);
-                raw = 1;
+            if (spec.len == LEN_L) {
+                va_arg(*mut_ap, const wchar_t *);
+                is_verbatim = 1;
             } else {
-                conv_str(&ob, &sp, va_arg(ap, const char *));
+                conv_str(&out, &spec, va_arg(*mut_ap, const char *));
             }
             break;
-        case 'p': conv_ptr(&ob, &sp, va_arg(ap, const void *)); break;
-        case 'm': conv_errno(&ob, &sp, errno); break;
+        case 'p':
+            conv_ptr(&out, &spec, va_arg(*mut_ap, const void *));
+            break;
+        case 'm':
+            conv_errno(&out, &spec, errno);
+            break;
         case 'n':
-            (void)va_arg(ap, void *);
-            raw = 1;
+            va_arg(*mut_ap, void *);
+            is_verbatim = 1;
             break;
         case 'f':
         case 'F':
@@ -467,115 +550,112 @@ static size_t log_vformat(char *buf, size_t cap, size_t indent, const char *fmt,
         case 'G':
         case 'a':
         case 'A': {
-            if (sp.len == LEN_BIG_L) {
-                (void)va_arg(ap, long double);
+            if (spec.len == LEN_BIG_L) {
+                va_arg(*mut_ap, long double);
             } else {
-                (void)va_arg(ap, double);
+                va_arg(*mut_ap, double);
             }
-            raw = 1;
+            is_verbatim = 1;
             break;
         }
-        case '%': put_char(&ob, '%'); break;
+        case '%':
+            put_char(&out, '%');
+            break;
         default:
-            put_mem(&ob, start, (size_t)(p - start));
-            put_mem(&ob, p, strlen(p));
-            p += strlen(p);
+            put_mem(&out, start, (size_t)(cursor - start));
+            put_mem(&out, cursor, strlen(cursor));
+            cursor += strlen(cursor);
             continue;
         }
-        if (raw) {
-            put_mem(&ob, start, (size_t)(p - start));
+        if (is_verbatim != 0) {
+            put_mem(&out, start, (size_t)(cursor - start));
         }
     }
 
     if (cap > 0) {
-        buf[(ob.len < cap) ? ob.len : cap - 1] = '\0';
+        mut_buf[(out.len < cap) ? out.len : cap - 1] = '\0';
     }
-    return ob.len;
+    return out.len;
 }
 
-__attribute__((format(printf, 3, 4))) static size_t log_format(char *buf, size_t cap, const char *fmt, ...)
+static __attribute__((format(printf, 3, 4))) size_t log_format(char *const mut_buf, size_t cap,
+                                                               const char *const fmt, ...)
 {
     va_list ap;
-    size_t n;
 
     va_start(ap, fmt);
-    n = log_vformat(buf, cap, 0, fmt, ap);
+    size_t len = log_vformat(mut_buf, cap, 0, fmt, &ap);
     va_end(ap);
 
-    return n;
+    return len;
 }
 
-void log_emit(const char *level, const char *file, int line, const char *func, int errnum,
-              enum print_padding padding, const char *fmt, ...)
+void log_emit(const char *const level, const char *const file, int line, const char *const func,
+              int errnum, enum print_padding padding, const char *const fmt_nullable, ...)
 {
     int saved_errno = errno;
     char buf[1024];
-    const char *desc = "";
-    struct timespec ts = {
-        0,
-    };
-    time_t sod;
-    va_list ap;
-    size_t cap;
-    size_t elen;
-    size_t indent;
-    size_t n;
+    const char *description = "";
+    struct timespec now = { 0 };
 
-    clock_gettime(CLOCK_REALTIME, &ts);
-    sod = ts.tv_sec % 86400;
-    if (sod < 0) {
-        sod += 86400;
+    clock_gettime(CLOCK_REALTIME, &now);
+    time_t seconds_of_day = now.tv_sec % 86400;
+    if (seconds_of_day < 0) {
+        seconds_of_day += 86400;
     }
 
-    elen = 0;
+    size_t tail_len = 0;
     if (errnum != 0) {
-        unsigned long long mag =
-            (errnum < 0) ? (unsigned long long)(-(errnum + 1)) + 1 : (unsigned long long)errnum;
+        unsigned long long magnitude = compute_magnitude(errnum);
 
-        desc = errdesc(errnum);
-        elen = strlen(desc) + sizeof(": ") + sizeof(" (errno=") + sizeof(")") - 3 + (errnum < 0);
+        description = describe_error(errnum);
+        tail_len = strlen(description) + sizeof(": ") + sizeof(" (errno=") + sizeof(")") - 3;
+        if (errnum < 0) {
+            ++tail_len;
+        }
         do {
-            elen++;
-            mag /= 10;
-        } while (mag != 0);
+            ++tail_len;
+            magnitude /= 10;
+        } while (magnitude != 0);
     }
-    cap = sizeof(buf) - elen - 1;
+    size_t cap = sizeof(buf) - tail_len - 1;
 
-    n = log_format(buf,
-                   cap,
-                   "%02d:%02d:%02d.%03ld [%-4s] [%d/%d] %s:%d %s(): ",
-                   (int)(sod / 3600),
-                   (int)(sod / 60 % 60),
-                   (int)(sod % 60),
-                   ts.tv_nsec / 1000000,
-                   level,
-                   getpid(),
-                   gettid(),
-                   file,
-                   line,
-                   func);
-    if (n > cap - 1) {
-        n = cap - 1;
+    size_t len = log_format(buf,
+                            cap,
+                            "%02d:%02d:%02d.%03ld [%-4s] [%d/%d] %s:%d %s(): ",
+                            (int)(seconds_of_day / 3600),
+                            (int)((seconds_of_day / 60) % 60),
+                            (int)(seconds_of_day % 60),
+                            now.tv_nsec / 1000000,
+                            level,
+                            getpid(),
+                            gettid(),
+                            file,
+                            line,
+                            func);
+    if (len > cap - 1) {
+        len = cap - 1;
     }
 
-    indent = (padding == PRINT_PADDING_ON) ? n : 0;
+    size_t indent = (padding == PRINT_PADDING_ON) ? len : 0;
+    va_list ap;
 
-    va_start(ap, fmt);
-    n += log_vformat(buf + n, cap - n, indent, fmt, ap);
+    va_start(ap, fmt_nullable);
+    len += log_vformat(buf + len, cap - len, indent, fmt_nullable, &ap);
     va_end(ap);
-    if (n > cap - 1) {
-        n = cap - 1;
+    if (len > cap - 1) {
+        len = cap - 1;
     }
 
     if (errnum != 0) {
-        n += log_format(buf + n, sizeof(buf) - n, ": %s (errno=%d)", desc, errnum);
-        if (n > sizeof(buf) - 2) {
-            n = sizeof(buf) - 2;
+        len += log_format(buf + len, sizeof(buf) - len, ": %s (errno=%d)", description, errnum);
+        if (len > sizeof(buf) - 2) {
+            len = sizeof(buf) - 2;
         }
     }
-    buf[n] = '\n';
-    ++n;
-    write_all(STDERR_FILENO, buf, n);
+    buf[len] = '\n';
+    ++len;
+    write_all(STDERR_FILENO, buf, len);
 
     errno = saved_errno;
 }

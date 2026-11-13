@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <errno.h>
 #include <spawn.h>
 #include <stdlib.h>
@@ -11,11 +13,9 @@
 int main(void)
 {
     pid_t pid;
-    char *child_argv[] = { "ls", "-al", NULL };
+    const char *child_argv[] = { "ls", "-al", NULL };
     int exit_code = 0;
-    int spawn_result;
-
-    spawn_result = posix_spawnp(&pid, "ls", NULL, NULL, child_argv, NULL);
+    int spawn_result = posix_spawnp(&pid, "ls", NULL, NULL, (char *const *)child_argv, NULL);
 
     if (spawn_result == 0) {
         int child_status;
@@ -25,23 +25,23 @@ int main(void)
         while (waitpid(pid, &child_status, 0) == -1) {
             if (errno != EINTR) {
                 PRINT_PERROR(errno, "waitpid failed");
-                return 1;
+                return EXIT_FAILURE;
             }
         }
 
-        if (WIFEXITED(child_status)) {
+        if (WIFEXITED(child_status) != 0) {
             PRINT_INFO("child return code is %d", WEXITSTATUS(child_status));
             exit_code = WEXITSTATUS(child_status);
-        } else if (WIFSIGNALED(child_status)) {
+        } else if (WIFSIGNALED(child_status) != 0) {
             PRINT_INFO("child terminated by signal %d", WTERMSIG(child_status));
             exit_code = SHELL_SIGNAL_BASE + WTERMSIG(child_status);
         } else {
             PRINT_ERR("child terminated abnormally");
-            exit_code = 1;
+            exit_code = EXIT_FAILURE;
         }
     } else {
         PRINT_PERROR(spawn_result, "posix_spawnp failed");
-        exit_code = 1;
+        exit_code = EXIT_FAILURE;
     }
 
     return exit_code;
