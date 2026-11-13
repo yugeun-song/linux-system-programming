@@ -1,7 +1,7 @@
 CC = gcc
 
 STD = -std=gnu99
-WARNINGS = -Wall -Wextra -Wconversion -Wsign-conversion
+WARNINGS = -Wall -Wextra -pedantic -Wshadow -Wconversion -Wsign-conversion
 DEBUG = -pg -O0 -ggdb3 -fno-omit-frame-pointer -fno-optimize-sibling-calls -fasynchronous-unwind-tables
 DEPFLAGS = -MMD -MP
 
