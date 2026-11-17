@@ -86,7 +86,7 @@ with a `=>` line that names what it produced and where. What the files do not st
 ## Coding style
 
 The code follows the
-[c-programming coding style](https://github.com/yugeun-song/c-programming/blob/main/docs/coding-style.md).
+[c-programming coding style](https://github.com/yugeun-song/c-programming/blob/main/docs/coding-style.en.md).
 `.clang-format` holds its formatting part and `make format-check` reports the files that differ from
 it; naming, pointer parameters, explicit comparisons and the other rules are kept by hand.
 `.editorconfig` and `.gitattributes` keep UTF-8, LF, 4-space indent, tabs only in the `Makefile`,
