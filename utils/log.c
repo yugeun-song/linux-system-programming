@@ -177,7 +177,7 @@ static void put_field(struct outbuf *const mut_out, const struct spec *const spe
 static size_t fmt_udigits(char *const mut_buf, unsigned long long value, unsigned base,
                           int is_upper)
 {
-    const char *digits = (is_upper != 0) ? "0123456789ABCDEF" : "0123456789abcdef";
+    const char *const digits = (is_upper != 0) ? "0123456789ABCDEF" : "0123456789abcdef";
     char tmp[24];
     size_t n = 0;
 
@@ -282,7 +282,7 @@ static void conv_ptr(struct outbuf *const mut_out, const struct spec *const spec
 
 static const char *describe_error(int errnum)
 {
-    const char *description = strerrordesc_np(errnum);
+    const char *const description = strerrordesc_np(errnum);
 
     return (description != NULL) ? description : "Unknown error";
 }
@@ -334,7 +334,7 @@ static size_t log_vformat(char *const mut_buf, size_t cap, size_t indent,
     const char *cursor = (fmt_nullable != NULL) ? fmt_nullable : "(null)";
 
     while (*cursor != '\0') {
-        const char *start = cursor;
+        const char *const start = cursor;
         struct spec spec = { 0 };
         int is_verbatim = 0;
 

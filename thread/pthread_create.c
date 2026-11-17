@@ -10,7 +10,7 @@
 static void *run_joinable_thread(void *const mut_arg)
 {
     uintptr_t thread_exit_code = 13;
-    const char *arg_msg = mut_arg;
+    const char *const arg_msg = mut_arg;
 
     PRINT_INFO("received message %s", arg_msg);
 
@@ -51,7 +51,7 @@ int main(void)
     }
 
     pthread_t joinable_thread;
-    const char *arg_msg = "Hello, POSIX Thread!";
+    const char *const arg_msg = "Hello, POSIX Thread!";
 
     return_code = pthread_create(&joinable_thread, NULL, run_joinable_thread, (void *)arg_msg);
     if (return_code != 0) {

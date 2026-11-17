@@ -47,7 +47,7 @@ static const char *get_si_code_name(int si_code)
 static void handle_signal(int signum, siginfo_t *const mut_info, void *const mut_ucontext)
 {
     int saved_errno = errno;
-    const ucontext_t *uc = mut_ucontext;
+    const ucontext_t *const uc = mut_ucontext;
 
     PRINT_INFO("signum=%d si_code=%s si_pid=%d pc=0x%016llx sp=0x%016llx",
                signum,

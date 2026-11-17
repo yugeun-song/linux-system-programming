@@ -13,7 +13,7 @@
 int main(void)
 {
     pid_t pid;
-    const char *child_argv[] = { "ls", "-al", NULL };
+    const char *const child_argv[] = { "ls", "-al", NULL };
     int exit_code = 0;
     int spawn_result = posix_spawnp(&pid, "ls", NULL, NULL, (char *const *)child_argv, NULL);
 
