@@ -19,7 +19,7 @@
     PRINT_EMIT("ERR", (errnum), PRINT_PADDING_OFF, __VA_ARGS__)
 
 enum print_padding {
-    PRINT_PADDING_OFF,
+    PRINT_PADDING_OFF = 0,
     PRINT_PADDING_ON,
 };
 

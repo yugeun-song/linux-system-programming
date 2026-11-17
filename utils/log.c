@@ -16,7 +16,7 @@
 #define FIELD_MAX 65535
 
 enum len_mod {
-    LEN_NONE,
+    LEN_NONE = 0,
     LEN_HH,
     LEN_H,
     LEN_L,
